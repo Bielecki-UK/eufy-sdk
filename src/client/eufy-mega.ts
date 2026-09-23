@@ -1227,8 +1227,10 @@ export class EufyMega extends EventEmitter {
    * Choose the transport stack for one command — the routing half of {@link commandSinkFor}.
    *
    * The `ff09-*` kinds share ONE frame that rides either transport, so each stack is asked whether it
-   * drives this device (`claimsDevice`) rather than inferring from the kind. `registry.require` throws
-   * on an unloaded serial, so a routing decision never silently falls through to the wrong transport.
+   * drives this device (`claimsDevice`) rather than inferring from the kind; `keyed-payload-actuate` (the
+   * classic Wi-Fi lock) is routed the same way, a channel-less actuation claimed by the stack that drives
+   * the lock. `registry.require` throws on an unloaded serial, so a routing decision never silently falls
+   * through to the wrong transport.
    * The `eufy_life` DP writes (smart lights) are secure-MQTT-only. `aiot-dp` routes to either the
    * Anker AIoT MQTT stack or the legacy Tuya REST router depending on the device's category
    * (`eufy_home_tuya` → Tuya, everything else → MQTT). The capability layer emits a single `aiot-dp`
@@ -1239,7 +1241,12 @@ export class EufyMega extends EventEmitter {
    * media only, and the RTC router refuses a command on it. Everything else is P2P.
    */
   private routeCommand(sn: string, cmd: Command): Promise<void> {
-    if (cmd.kind === "ff09-actuate" || cmd.kind === "ff09-autolock" || cmd.kind === "ff09-setting-toggle") {
+    if (
+      cmd.kind === "ff09-actuate" ||
+      cmd.kind === "ff09-autolock" ||
+      cmd.kind === "ff09-setting-toggle" ||
+      cmd.kind === "keyed-payload-actuate"
+    ) {
       const dev = this.registry.require(sn);
       if (P2PCommandRouter.claimsDevice(dev)) return this.p2p.dispatchCommand(sn, cmd);
       if (MqttCommandRouter.claimsDevice(dev)) return this.mqtt.dispatchCommand(sn, cmd);

@@ -27,7 +27,7 @@ import { VacuumMapStore } from "../model/index.js";
 import { type P2PSession, type P2PFrame } from "../transport/p2p/p2p-session.js";
 import { P2PCommandRouter } from "../transport/p2p/command-router.js";
 import { RtcCommandRouter, type RtcRoute } from "../transport/rtc/command-router.js";
-import { jpegGeometry } from "../transport/p2p/media.js";
+import { jpegGeometry } from "../transport/still.js";
 import type { PowerTier } from "../transport/p2p/session-manager.js";
 import { MqttCommandRouter } from "../transport/mqtt/command-router.js";
 import { TuyaCommandRouter } from "../transport/tuya/command-router.js";
@@ -371,6 +371,7 @@ export class EufyMega extends EventEmitter {
       shard: () => this.mega.rtcShard,
       country: opts.countryCode,
       logger: opts.logger,
+      ffmpegPath: opts.ffmpegPath,
       onError: (e) => this.reportError(e),
     });
     this.mqtt = new MqttCommandRouter({
@@ -1096,7 +1097,7 @@ export class EufyMega extends EventEmitter {
    * current. With nothing retained the refusal stands.
    */
   private mediaProviderFor(sn: string): MediaProvider {
-    const media = this.p2p.mediaProviderFor(sn);
+    const media = this.rtcMediaFor(sn) ?? this.p2p.mediaProviderFor(sn);
     const cache = this.storedImages;
     if (!cache) return media;
     const retainedStill = () => {
@@ -1152,27 +1153,47 @@ export class EufyMega extends EventEmitter {
       if (dev.category === "eufy_home_tuya") return this.tuya.dispatchCommand(sn, cmd);
       return this.mqtt.dispatchCommand(sn, cmd);
     }
+    const route = this.rtcRouteFor(sn);
+    if (route) {
+      if (route.attached && this.registry.serialForFrame(route.stationSn, cmd.channel) !== sn)
+        return Promise.reject(new Error("RTC command requires an unambiguous attached-device channel"));
+      return this.rtc.dispatchCommand(route, cmd);
+    }
+    return this.p2p.dispatchCommand(sn, cmd);
+  }
+
+  /**
+   * The RTC route for a T9000 or T8N00 station or a device attached to one, decided by the station's model
+   * classification; `undefined` for any other device. A T8N00 route carries its native `call` signalling. The admin id is the station's
+   * `member.admin_user_id`, else the logged-in user.
+   */
+  private rtcRouteFor(sn: string): RtcRoute | undefined {
     const devices = this.registry.list();
     const target = devices.find((d) => d.sn === sn);
     const stationSn = target?.stationSn || sn;
     const station = devices.find((d) => d.sn === stationSn);
-    const stationRaw = (station?.raw ?? {}) as { device_type?: unknown; member?: { admin_user_id?: unknown } };
-    const deviceType = typeof stationRaw.device_type === "number" ? stationRaw.device_type : undefined;
+    const raw = (station?.raw ?? {}) as { device_type?: unknown; member?: { admin_user_id?: unknown } };
+    const deviceType = typeof raw.device_type === "number" ? raw.device_type : undefined;
     const family = { deviceType, model: station?.model };
     const native = isNvrT8N00(family);
-    if (target && station && (isStation9000(family) || native)) {
-      const attached = stationSn !== sn;
-      if (attached && this.registry.serialForFrame(stationSn, cmd.channel) !== sn)
-        return Promise.reject(new Error("RTC command requires an unambiguous attached-device channel"));
-      const member = stationRaw.member?.admin_user_id;
-      const adminUserId = typeof member === "string" && member ? member : undefined;
-      const base: RtcRoute = { stationSn, adminUserId, attached };
-      return this.rtc.dispatchCommand(
-        native ? { ...base, signalingMode: "call", iceTransportPolicy: "all" } : base,
-        cmd,
-      );
-    }
-    return this.p2p.dispatchCommand(sn, cmd);
+    if (!target || !station || !(isStation9000(family) || native)) return undefined;
+    const member = raw.member?.admin_user_id;
+    const adminUserId = typeof member === "string" && member ? member : undefined;
+    const base: RtcRoute = { stationSn, adminUserId, attached: stationSn !== sn };
+    return native ? { ...base, signalingMode: "call", iceTransportPolicy: "all" } : base;
+  }
+
+  /**
+   * The RTC media provider for a camera attached to a T9000 whose `device_channel` resolves back to it on
+   * the station; `undefined` otherwise, including a camera behind a T8N00, whose route carries commands only.
+   */
+  private rtcMediaFor(sn: string): MediaProvider | undefined {
+    const route = this.rtcRouteFor(sn);
+    if (!route?.attached || route.signalingMode === "call") return undefined;
+    const raw = (this.registry.list().find((d) => d.sn === sn)?.raw ?? {}) as { device_channel?: unknown };
+    const channel = typeof raw.device_channel === "number" ? raw.device_channel : undefined;
+    if (channel === undefined || this.registry.serialForFrame(route.stationSn, channel) !== sn) return undefined;
+    return this.rtc.mediaProviderFor({ ...route, cameraSn: sn, channel });
   }
 
   /**

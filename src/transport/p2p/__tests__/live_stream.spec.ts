@@ -291,7 +291,7 @@ describe("LiveStream access-unit reassembly", () => {
     session.push(videoChunk(small, { timestamp: second, sequence: 4 }));
     session.push(videoChunk(small, { timestamp: 0, sequence: 5 }));
 
-    expect(frames.map((frame) => frame.sourceTimestampMs)).toEqual([first, second, 0]);
+    expect(frames.map((frame) => frame.sourceTimestamp)).toEqual([first, second, 0]);
   });
 
   it("emits nothing while the unit's latest frame is still full", () => {

@@ -159,7 +159,7 @@ export class RtcSession extends EventEmitter<RtcSessionEvents> {
    * its own thread, after the signalling socket may have closed; with no socket there is nobody to tell.
    */
   private trickle(candidate: string): void {
-    if (this.closed || !this.signaling.isOpen) return;
+    if (!this.signaling.isOpen) return;
     this.signaling.sendInfoCandidate(candidate);
   }
 

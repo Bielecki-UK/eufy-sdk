@@ -136,11 +136,13 @@ const DEVICE_NOTIFY_FLAG = 0x08;
 export type DeviceNotificationMode = Extract<ArmingMode, "home" | "away" | "custom1">;
 
 /**
- * The standalone cameras whose own Device Control write is captured: a T8170 sends cmd 1255 to itself with
- * only its own entry `{mode_id, devices:[{device_channel, action}]}`, and its next param report carries
- * the new flags (2026-10-09, 2026-10-11).
+ * The standalone cameras whose own Device Control write is confirmed: cmd 1255 to the camera itself with only
+ * its own entry `{mode_id, devices:[{device_channel, action}]}`, the new flags reported back after it.
+ * ✅ T8170: wire-captured (2026-10-09, 2026-10-11). ✅ T8171: confirmed live both ways (2026-10-12, Home
+ * 9 → 1 → 9 in its cloud params). ✗ A T8400, T8442 and T8410 did not acknowledge it within 20 s and kept
+ * their flags (2026-10-12), so they are read only.
  */
-const STANDALONE_ACTION_MODELS: ReadonlySet<string> = new Set(["T8170"]);
+const STANDALONE_ACTION_MODELS: ReadonlySet<string> = new Set(["T8170", "T8171"]);
 
 /**
  * A device's own flags for `mode`, as its params report them: Home on 1225, Away on 1239, custom1 on 1148,
@@ -461,7 +463,7 @@ export const ARMING_MEMBERS = {
         return typeof action === "number" ? (action & DEVICE_NOTIFY_FLAG) !== 0 : undefined;
       },
     "Whether the device on a channel sends a push notification in a guard mode (home/away/custom1).",
-    (ctx) => ctx.model === "T8010" || STANDALONE_ACTION_MODELS.has(ctx.model ?? ""),
+    () => true,
   ),
 
   /**

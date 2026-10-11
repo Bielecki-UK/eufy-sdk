@@ -308,10 +308,13 @@ describe("arming capability module", () => {
       expect(sent).toEqual([]);
     });
 
-    it("is absent on a standalone model whose write is not captured", () => {
+    it("is read only on a standalone model whose write is not confirmed", () => {
       const { acts } = bind<ArmingActions>("arming", { ...t8170, model: "T8400" }, { read });
-      expect(acts.deviceNotification).toBeUndefined();
+      expect(acts.deviceNotification!("home", 0)).toBe(true);
       expect(acts.setDeviceNotification).toBeUndefined();
+      expect(
+        bind<ArmingActions>("arming", { ...t8170, model: "T8171" }, { read }).acts.setDeviceNotification,
+      ).toBeDefined();
     });
   });
 
@@ -372,9 +375,12 @@ describe("arming capability module", () => {
       expect([...unlisted.sent, ...noTable.sent]).toEqual([]);
     });
 
-    it("is absent on another station model", () => {
+    it("reads nothing and writes nothing on another station model", () => {
       const { acts } = bind<ArmingActions>("arming", { ...ctx, model: "T8030" }, { read });
-      expect(acts.deviceNotification).toBeUndefined();
+      expect(
+        acts.deviceNotification!(AlarmDelayMode.home, 0),
+        "a base answers only from its own params",
+      ).toBeUndefined();
       expect(acts.setDeviceNotification).toBeUndefined();
     });
 

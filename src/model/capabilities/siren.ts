@@ -139,6 +139,21 @@ function homeBaseAlarm(seconds: number, ctx: CommandContext): Command {
 const PORTAL_MANUAL_ALARM_TYPE = 10;
 
 /**
+ * The camera models whose alarm behind a HomeBase S1 Pro answered the portal's `1350` form with `err=0` on
+ * a real T9000. Another model there has no evidence for the form, so its alarm throws.
+ */
+const S1_PRO_ALARM_MODELS: ReadonlySet<string> = new Set([
+  "T8113",
+  "T8122",
+  "T8134",
+  "T814X",
+  "T8161",
+  "T8214",
+  "T8400",
+  "T8790",
+]);
+
+/**
  * Build the attached-camera duration command for its own bound device channel. Behind a HomeBase S1
  * Pro (`STATION_9000`) it is the portal's `1350` SET_PAYLOAD form, `{time_out, type, channel,
  * username}` with the acting account name; behind any other HomeBase it is the app's int-plus-string
@@ -146,6 +161,9 @@ const PORTAL_MANUAL_ALARM_TYPE = 10;
  */
 function cameraAlarm(seconds: number, ctx: CommandContext): Command {
   if (isStation9000({ deviceType: ctx.stationDeviceType })) {
+    if (!S1_PRO_ALARM_MODELS.has((ctx.model ?? "").toUpperCase().slice(0, 5))) {
+      throw new Error(`a camera alarm behind a HomeBase S1 Pro is unverified for ${ctx.model ?? "this model"}`);
+    }
     if (!ctx.accountName) throw new Error("a camera alarm behind a HomeBase S1 Pro requires the acting account name");
     return setPayload(
       SIREN_CMD.CAMERA_TONE,

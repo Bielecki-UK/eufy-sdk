@@ -1087,11 +1087,26 @@ export class EufyMega extends EventEmitter {
     };
   }
 
-  /** The cloud `device_type` of `parentSn`'s record when it is another device's station; else undefined. */
-  private stationDeviceTypeOf(parentSn: unknown, sn: string): number | undefined {
-    if (typeof parentSn !== "string" || !parentSn || parentSn === sn) return undefined;
-    const raw = (this.registry.list().find((d) => d.sn === parentSn)?.raw ?? {}) as { device_type?: unknown };
-    return typeof raw.device_type === "number" ? raw.device_type : undefined;
+  /**
+   * The station a device's commands go through: the device itself, or the HomeBase the registry links it
+   * to. The RTC route is resolved from it, and the command context reads the station's type from it.
+   */
+  private stationOf(sn: string) {
+    const devices = this.registry.list();
+    const target = devices.find((d) => d.sn === sn);
+    const stationSn = target?.stationSn || sn;
+    const station = devices.find((d) => d.sn === stationSn);
+    const raw = (station?.raw ?? {}) as { device_type?: unknown; member?: { admin_user_id?: unknown } };
+    const deviceType = typeof raw.device_type === "number" ? raw.device_type : undefined;
+    const family = { deviceType, model: station?.model };
+    return { target, station, stationSn, raw, deviceType, t9000: isStation9000(family), t8n00: isNvrT8N00(family) };
+  }
+
+  /** The vendor DeviceType of the station a device hangs off; `undefined` for a station itself. */
+  private stationDeviceTypeOf(sn: string): number | undefined {
+    const st = this.stationOf(sn);
+    if (!st.station || st.stationSn === sn) return undefined;
+    return st.deviceType;
   }
 
   /**
@@ -1175,15 +1190,8 @@ export class EufyMega extends EventEmitter {
    * `member.admin_user_id`, else the logged-in user.
    */
   private rtcRouteFor(sn: string): RtcRoute | undefined {
-    const devices = this.registry.list();
-    const target = devices.find((d) => d.sn === sn);
-    const stationSn = target?.stationSn || sn;
-    const station = devices.find((d) => d.sn === stationSn);
-    const raw = (station?.raw ?? {}) as { device_type?: unknown; member?: { admin_user_id?: unknown } };
-    const deviceType = typeof raw.device_type === "number" ? raw.device_type : undefined;
-    const family = { deviceType, model: station?.model };
-    const native = isNvrT8N00(family);
-    if (!target || !station || !(isStation9000(family) || native)) return undefined;
+    const { target, station, stationSn, raw, t9000, t8n00: native } = this.stationOf(sn);
+    if (!target || !station || !(t9000 || native)) return undefined;
     const member = raw.member?.admin_user_id;
     const adminUserId = typeof member === "string" && member ? member : undefined;
     const base: RtcRoute = { stationSn, adminUserId, attached: stationSn !== sn };
@@ -2199,7 +2207,7 @@ export class EufyMega extends EventEmitter {
       hasP2p: P2PCommandRouter.claimsDevice(dev),
       // Topology as the record states it: a parent that isn't the device itself means HomeBase-attached.
       homeBaseAttached: !!raw.parent_sn && raw.parent_sn !== dev.sn,
-      stationDeviceType: this.stationDeviceTypeOf(raw.parent_sn, dev.sn),
+      stationDeviceType: this.stationDeviceTypeOf(sn),
       dpCatalog,
     };
   }

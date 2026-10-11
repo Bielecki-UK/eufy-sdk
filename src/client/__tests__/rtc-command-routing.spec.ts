@@ -189,6 +189,9 @@ describe("command context of a device behind a station", () => {
     const t9000 = fixture();
     expect((await contextOf(t9000.internals, CAMERA, "T8425")).stationDeviceType).toBe(DeviceType.STATION_9000);
     expect((await contextOf(t9000.internals, HUB, "T9000")).stationDeviceType).toBeUndefined();
+    const linkedOnly = fixture();
+    linkedOnly.devices[1]!.raw = { device_channel: 3 };
+    expect((await contextOf(linkedOnly.internals, CAMERA, "T8425")).stationDeviceType).toBe(DeviceType.STATION_9000);
     const hb3 = fixture(DeviceType.HB3);
     expect((await contextOf(hb3.internals, CAMERA, "T8425")).stationDeviceType).toBe(DeviceType.HB3);
   });

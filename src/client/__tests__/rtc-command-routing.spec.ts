@@ -82,9 +82,9 @@ describe("station-owned RTC command routing", () => {
     const { internals, rtc, p2p, devices } = fixture(DeviceType.NVR_S4_MAX);
     devices[0]!.model = "T8N00";
     devices[1]!.model = "T8E00";
-    if (issue === "missing") devices[1]!.raw = { parent_sn: HUB };
+    if (issue === "missing") Object.assign(devices[1]!, { channel: undefined, raw: { parent_sn: HUB } });
     if (issue === "shared") devices.push({ ...devices[1]!, sn: "T8000P0000000002" });
-    if (issue === "mismatched") devices[1]!.raw = { parent_sn: HUB, device_channel: 4 };
+    if (issue === "mismatched") Object.assign(devices[1]!, { channel: 4, raw: { parent_sn: HUB, device_channel: 4 } });
     await expect(internals.routeCommand(CAMERA, command)).rejects.toThrow("unambiguous attached-device channel");
     expect(rtc).not.toHaveBeenCalled();
     expect(p2p).not.toHaveBeenCalled();

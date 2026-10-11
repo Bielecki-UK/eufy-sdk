@@ -165,6 +165,14 @@ const DEFAULT_PREWARM_TIERS: readonly PowerTier[] = ["wired", "battery"];
  */
 const SESSION_RECYCLE_WAIT_MS = 5_000;
 
+/**
+ * Backoff bounds for bringing push up again after its startup attempt failed: the first retry waits the
+ * minimum, each following one doubles, capped at the maximum — the same ten-minute ceiling the MCS
+ * socket's own reconnect backs off to.
+ */
+const PUSH_RETRY_MIN_MS = 30_000;
+const PUSH_RETRY_MAX_MS = 600_000;
+
 interface RealtimeGeneration {
   readonly epoch: number;
   readonly readiness: MutableRealtimeReadiness;
@@ -321,6 +329,8 @@ export class EufyMega extends EventEmitter {
   private readonly mapStores = new Map<string, VacuumMapStore>();
   /** Re-armed after each cloud-param poll; cancelled by {@link disconnect}. */
   private readonly pollTimer = new Timer();
+  /** Armed while a failed push bring-up waits to be retried; cancelled by {@link disconnect}. */
+  private readonly pushRetryTimer = new Timer();
 
   constructor(opts: EufyMegaOptions) {
     super();
@@ -1428,12 +1438,41 @@ export class EufyMega extends EventEmitter {
       this.schedulePoll();
       const failures = readiness.push.failed + readiness.mqtt.failed + readiness.wiredP2p.failed;
       this.settleRealtimeGeneration(generation, failures || startupFailed ? "partial" : "ready");
+      if (readiness.push.failed) this.retryPush(generation);
     } catch (e) {
       this.reportError(e);
       readiness.push.failed += readiness.push.pending;
       readiness.push.pending = 0;
       this.settleRealtimeGeneration(generation, epoch === this.realtimeEpoch ? "partial" : "superseded");
     }
+  }
+
+  /**
+   * Bring push up again after the generation's startup attempt failed, backing off between attempts
+   * until one connects, the generation is superseded, or it is aborted by {@link disconnect}.
+   *
+   * Push is the only channel that carries the account's event notifications (a doorbell press among
+   * them), and its bring-up is several network round-trips — the FCM registration and the MCS login —
+   * any of which a transient outage fails. The MCS socket reconnects on
+   * its own once it has connected; this covers the attempt that never got that far. Every failed attempt
+   * is reported via `error`. The settled {@link RealtimeReadiness} is a startup snapshot and is not
+   * revised when a retry connects.
+   */
+  private retryPush(generation: RealtimeGeneration, delayMs = PUSH_RETRY_MIN_MS): void {
+    this.pushRetryTimer.arm(delayMs, () => {
+      if (generation.epoch !== this.realtimeEpoch) return;
+      this.startPush(generation.abort.signal).then(
+        (client) => {
+          if (generation.epoch !== this.realtimeEpoch) return client.close();
+          this.pushClient = client;
+        },
+        (error) => {
+          if (error instanceof RealtimeStartupSupersededError || generation.epoch !== this.realtimeEpoch) return;
+          this.reportError(error);
+          this.retryPush(generation, Math.min(delayMs * 2, PUSH_RETRY_MAX_MS));
+        },
+      );
+    });
   }
 
   /** Resolve a generation with an immutable count snapshot; later transport completions are ignored. */
@@ -2354,6 +2393,7 @@ export class EufyMega extends EventEmitter {
    */
   private async teardownRealtime(): Promise<void> {
     this.pollTimer.cancel();
+    this.pushRetryTimer.cancel();
     this.lastStateAnnounced.clear();
     await this.closeMqttTransports();
     this.rtc.close();

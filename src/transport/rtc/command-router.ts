@@ -29,7 +29,7 @@ import type { Logger } from "../../core/logger.js";
 import { abortable } from "../abortable.js";
 import { captureSnapshotFromShared } from "../p2p/media.js";
 import { openReadableFromConsumer } from "../p2p/readable-egress.js";
-import { SharedLiveSource } from "../p2p/shared-live-source.js";
+import { SharedLiveSource, attachUnlessAborted } from "../p2p/shared-live-source.js";
 import { RtcLiveStream } from "./live.js";
 import { RtcSession, type RtcSessionOptions } from "./session.js";
 import {
@@ -163,11 +163,10 @@ export class RtcCommandRouter {
    */
   mediaProviderFor(route: RtcLiveRoute): MediaProvider {
     return {
-      live: (opts) =>
-        this.withLiveSource(route, opts ?? {}, (source) => this.attachUnlessAborted(source, opts?.signal)),
+      live: (opts) => this.withLiveSource(route, opts ?? {}, (source) => attachUnlessAborted(source, opts?.signal)),
       openReadable: (opts) =>
         this.withLiveSource(route, opts ?? {}, (source) =>
-          openReadableFromConsumer(this.attachUnlessAborted(source, opts?.signal), opts),
+          openReadableFromConsumer(attachUnlessAborted(source, opts?.signal), opts),
         ),
       snapshotLive: (opts) =>
         this.withLiveSource(route, opts ?? {}, (source) =>
@@ -199,7 +198,7 @@ export class RtcCommandRouter {
    * so a consumer it attaches is counted before any other caller looks.
    *
    * The station streams one camera at a time. Another camera whose source has consumers refuses this one,
-   * before the session is awaited and again after; one with none (never attached, lingering or stopped)
+   * before the session is awaited and again after; one with none (never attached or lingering)
    * holds nothing a viewer needs, so it is disposed and the slot taken. The first caller's
    * {@link SharedSourceHints} configure a new source.
    */
@@ -216,7 +215,7 @@ export class RtcCommandRouter {
     const st = await abortable(this.stationSession(route.stationSn, accountId, identity), opts.signal);
     this.refuseIfWatched(route);
     const current = this.lives.get(route.stationSn);
-    if (current && (current.cameraSn !== route.cameraSn || current.source.state === "stopped")) {
+    if (current && current.cameraSn !== route.cameraSn) {
       this.deps.logger?.debug?.(
         `[rtc] ${route.stationSn} releasing the unwatched source of ${current.cameraSn} for ${route.cameraSn}`,
       );
@@ -237,19 +236,6 @@ export class RtcCommandRouter {
     if (current && current.cameraSn !== route.cameraSn && current.source.consumerCount > 0) {
       throw new StationStreamBusyError(route.stationSn, current.cameraSn);
     }
-  }
-
-  /**
-   * Attach a consumer, unless the caller has already abandoned the call. A consumer attached for a caller
-   * that has gone is detached at once, which lets the pull linger and fall away if nothing else holds it.
-   */
-  private attachUnlessAborted(source: SharedLiveSource, signal?: AbortSignal): ReturnType<SharedLiveSource["attach"]> {
-    const consumer = source.attach();
-    if (signal?.aborted) {
-      consumer.detach();
-      signal.throwIfAborted();
-    }
-    return consumer;
   }
 
   private newLiveSource(

@@ -62,7 +62,7 @@ import {
 } from "./recording-download.js";
 import type { FfmpegLevel } from "../ffmpeg.js";
 import { LiveStream } from "./live-stream.js";
-import { SharedLiveSource, type Consumer } from "./shared-live-source.js";
+import { SharedLiveSource, attachUnlessAborted, type Consumer } from "./shared-live-source.js";
 import {
   SessionManager,
   SessionSupersededError,
@@ -751,11 +751,11 @@ export class P2PCommandRouter {
       },
       live: async (opts) => {
         const source = await this.sharedLiveSourceFor(sn, opts as SharedLiveOpts, true);
-        return this.attachUnlessAborted(source, (opts as SharedLiveOpts | undefined)?.signal);
+        return attachUnlessAborted(source, (opts as SharedLiveOpts | undefined)?.signal);
       },
       openReadable: async (opts) => {
         const source = await this.sharedLiveSourceFor(sn, opts ?? {}, true);
-        return openReadableFromConsumer(this.attachUnlessAborted(source, opts?.signal), opts);
+        return openReadableFromConsumer(attachUnlessAborted(source, opts?.signal), opts);
       },
       recordFragments: (opts) => this.recordFragments(sn, opts),
       talkback: (opts) => this.openTalkback(sn, opts),
@@ -1146,23 +1146,6 @@ export class P2PCommandRouter {
    * A still with no live sibling re-asserts, so a tile refreshing on a quiet station is
    * unaffected.
    */
-
-  /**
-   * Attach a consumer, unless the caller has already abandoned the call.
-   *
-   * The acquisition it just waited through can outlast the caller's interest, and a consumer attached for
-   * somebody who has gone keeps the pull warm for nobody. Detaching immediately gives the pull back, which
-   * lets it linger and fall away if this was the only thing holding it, and leaves it untouched if it was
-   * not.
-   */
-  private attachUnlessAborted(source: SharedLiveSource, signal?: AbortSignal): Consumer {
-    const consumer = source.attach();
-    if (signal?.aborted) {
-      consumer.detach();
-      signal.throwIfAborted();
-    }
-    return consumer;
-  }
 
   /**
    * Dispose one cached live source and forget it, so the next acquisition builds a fresh one. Its claim

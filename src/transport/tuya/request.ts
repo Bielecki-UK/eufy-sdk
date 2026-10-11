@@ -53,7 +53,7 @@ export interface TuyaSession {
   chKey: string;
   /**
    * Per-login encryption code (`User.ecode`), read from the decrypted `login.reg` reply. Absent until
-   * login completes; it keys the et=3 reply decryption for every session call (see {@link deriveBodyKey}).
+   * login completes; it keys the et=3 reply decryption for every session call.
    */
   ecode?: string;
 }

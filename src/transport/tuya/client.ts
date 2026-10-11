@@ -127,9 +127,9 @@ export class TuyaClient {
    * Build + POST an action, returning the parsed envelope. Requires a working signer.
    *
    * On an `et=3` reply the envelope's `result` is a base64 AES-128-GCM blob, not an object; this
-   * decrypts it (keyed off the request's `requestId` and the session's `ecode`, via {@link deriveBodyKey}
-   * and {@link decryptReply}) and returns the decrypted inner envelope, so callers read `result` as an
-   * object regardless. A non-string `result` (an error, or an already-plain reply) passes through untouched.
+   * decrypts it (keyed off the request's `requestId` and the session's `ecode`) and returns the
+   * decrypted inner envelope, so callers read `result` as an object regardless. A non-string `result`
+   * (an error, or an already-plain reply) passes through untouched.
    */
   async call<T = unknown>(action: TuyaAction): Promise<TuyaEnvelope<T>> {
     const params = this.buildRequest(action);

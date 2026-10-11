@@ -175,3 +175,21 @@ describe("station-owned RTC command routing", () => {
     expect(media).not.toHaveBeenCalled();
   });
 });
+
+describe("command context of a device behind a station", () => {
+  /** The context a capability gets, from the record the command sink already holds. */
+  const contextOf = (internals: unknown, sn: string, model: string) =>
+    (
+      internals as {
+        commandContext(sn: string, known: unknown): Promise<{ stationDeviceType?: number }>;
+      }
+    ).commandContext(sn, { sn, model, params: {} });
+
+  it("names the cloud device_type of the station a camera hangs off, and none for the station itself", async () => {
+    const t9000 = fixture();
+    expect((await contextOf(t9000.internals, CAMERA, "T8425")).stationDeviceType).toBe(DeviceType.STATION_9000);
+    expect((await contextOf(t9000.internals, HUB, "T9000")).stationDeviceType).toBeUndefined();
+    const hb3 = fixture(DeviceType.HB3);
+    expect((await contextOf(hb3.internals, CAMERA, "T8425")).stationDeviceType).toBe(DeviceType.HB3);
+  });
+});

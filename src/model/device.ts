@@ -142,6 +142,11 @@ export class Device {
    * device's own serial and every device therefore has a station.
    */
   stationSn: string;
+  /**
+   * This device's channel on its station, the key `arming().deviceNotification` and its setter take. Absent where
+   * the record states none; like every identity field here, a record that omits it keeps the last known value.
+   */
+  channel?: number;
   /** Resolved command-codec family. */
   codec!: ResolvedDevice["codec"];
   /** Resolved capability set. Widens if the device later reports evidence for more. */
@@ -347,6 +352,7 @@ export class Device {
     this.deviceName = rec.name ?? this.deviceName;
     this.name = this.deviceName ?? this.modelName;
     this.stationSn = rec.parentSn ?? this.stationSn;
+    this.channel = rec.channel ?? this.channel;
   }
 
   /** Does this device have the given capability? */

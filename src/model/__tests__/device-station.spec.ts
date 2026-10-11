@@ -33,3 +33,17 @@ describe("Device.stationSn", () => {
     expect(device.stationSn).toBe(BASE);
   });
 });
+
+/** The key a station's per-device tables list a device under, which `arming().deviceNotification` takes. */
+describe("Device.channel", () => {
+  it("is the channel the record states, kept when a later record omits it", () => {
+    const device = Device.fromRecord(CAM, record({ parentSn: BASE, channel: 1 }));
+    expect(device.channel).toBe(1);
+    device.reresolve(record({ parentSn: BASE }));
+    expect(device.channel).toBe(1);
+  });
+
+  it("is absent where the record states none", () => {
+    expect(Device.fromRecord(CAM, record()).channel).toBeUndefined();
+  });
+});

@@ -31,6 +31,8 @@ export interface DeviceRecord {
   name?: string;
   /** Parent HomeBase serial when attached (topology signal; see {@link CloudRecord.parentSn}). */
   parentSn?: string;
+  /** The device's channel on its station (see {@link CloudRecord.channel}). */
+  channel?: number;
   params: Record<number, string>;
   /** Per-param `update_time` in **unix seconds** (see {@link EufyDevice.paramUpdatedAt}). */
   paramUpdatedAt: Record<number, number>;
@@ -534,6 +536,7 @@ export class DeviceRegistry {
       category: dev.category,
       name: dev.name,
       parentSn: station === sn ? undefined : station,
+      channel: dev.channel,
       params,
       paramUpdatedAt,
       dpParams: this.dpParams.get(sn),

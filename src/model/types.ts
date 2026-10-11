@@ -359,6 +359,11 @@ export interface CloudRecord {
    * HomeBase owns them.
    */
   parentSn?: string;
+  /**
+   * The device's channel on its station (`device_channel`), when the record states one: the key a station's
+   * per-device tables, such as a guard mode's action table, list it under.
+   */
+  channel?: number;
   /** Reported param_type → raw value. Presence of a param is a capability signal. */
   params?: Record<number, string>;
   /**

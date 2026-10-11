@@ -100,7 +100,7 @@ export interface RtcCommandRouterDeps {
   createSession?: (opts: RtcSessionOptions) => RtcSession;
 }
 
-/** A station's live pull: the camera it serves and the shared source, registered before it is built. */
+/** A station's live pull: the camera it serves and its shared source. */
 interface StationLive {
   cameraSn: string;
   source: SharedLiveSource;
@@ -212,7 +212,7 @@ export class RtcCommandRouter {
     const identity = this.deps.identity();
     if (!identity) throw new Error(`rtc: not logged in, cannot open ${route.stationSn}`);
     const accountId = route.adminUserId || identity.userId;
-    const st = await abortable(this.stationSession(route.stationSn, accountId, identity), opts.signal);
+    const st = await abortable(this.stationSession(route, accountId, identity), opts.signal);
     this.refuseIfWatched(route);
     const current = this.lives.get(route.stationSn);
     if (current && current.cameraSn !== route.cameraSn) {

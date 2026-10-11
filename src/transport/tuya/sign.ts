@@ -109,8 +109,8 @@ export const TUYA_SIGN_K =
 /**
  * Resolve the app-wide HMAC key {@link TUYA_SIGN_K}: an explicit `override` wins, then the
  * `TUYA_SIGN_KEY` env var (for custom builds), then the built-in constant. Shared by the request
- * signer ({@link HmacSigner}) and the et=3 reply body-key derivation (`et3.ts`), which key off the
- * same `K`.
+ * signer ({@link HmacSigner}) and the et=3 reply body-key derivation, which key off the same `K`.
+ * @internal
  */
 export function resolveSignKey(override?: string): string {
   return override ?? process.env.TUYA_SIGN_KEY ?? TUYA_SIGN_K;

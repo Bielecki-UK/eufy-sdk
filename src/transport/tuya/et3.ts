@@ -8,7 +8,7 @@
  * Blob layout: `nonce(12) ‖ ciphertext ‖ tag(16)`, no AAD, 12-byte GCM nonce, 16-byte tag. The
  * plaintext is gzip-compressed when it carries the gzip magic (`1f 8b`).
  */
-import { createDecipheriv, createHmac } from "node:crypto";
+import { createCipheriv, createDecipheriv, createHmac, randomBytes } from "node:crypto";
 import { gunzipSync } from "node:zlib";
 import { resolveSignKey } from "./sign.js";
 
@@ -26,6 +26,19 @@ export function deriveBodyKey(requestId: string, ecode: string | null): Buffer {
   const msg = ecode === null ? k : `${k}_${ecode}`;
   const hex = createHmac("sha256", requestId).update(msg, "utf-8").digest("hex");
   return Buffer.from(hex.slice(0, 16), "ascii");
+}
+
+/**
+ * Encrypt an `et=3` request `postData`: AES-128-GCM under a random 12-byte nonce, laid out
+ * `nonce(12) ‖ ciphertext ‖ tag(16)` then base64 — the inverse of {@link decryptReply}, keyed by the
+ * same {@link deriveBodyKey}. No AAD. The server rejects a plaintext `postData` sent under `et=3` with
+ * `DECODE_ERROR`, so a body-bearing request must carry this blob, and the request is signed over it.
+ */
+export function encryptBody(key: Buffer, json: string): string {
+  const nonce = randomBytes(12);
+  const cipher = createCipheriv("aes-128-gcm", key, nonce);
+  const ciphertext = Buffer.concat([cipher.update(Buffer.from(json, "utf-8")), cipher.final()]);
+  return Buffer.concat([nonce, ciphertext, cipher.getAuthTag()]).toString("base64");
 }
 
 /**

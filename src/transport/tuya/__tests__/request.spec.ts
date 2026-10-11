@@ -8,6 +8,7 @@ import {
   type TuyaSession,
 } from "../request.js";
 import { buildSignPreimage, type TuyaSigner } from "../sign.js";
+import { deriveBodyKey, decryptReply } from "../et3.js";
 
 /** Records the preimage it is handed and returns a fixed digest — no native code needed. */
 class SpySigner implements TuyaSigner {
@@ -73,12 +74,14 @@ describe("buildApiParams", () => {
     expect(pre).toContain("clientId=w8x4ppqkdxvqnd73ahj9");
   });
 
-  it("carries postData into the params and folds it in the sign preimage", () => {
+  it("encrypts postData for et=3 and folds the encrypted blob into the sign preimage", () => {
     const signer = new SpySigner();
     const action = buildGetDeviceDpsAction("dev-1");
     const params = buildApiParams(action, { session, signer, time: 1, requestId: "r" });
-    expect(params.postData).toBe(action.postData);
-    // preimage never contains the raw postData json (it is swapMd5-folded)
+    // et=3 ships the body encrypted, not the plaintext JSON
+    expect(params.postData).not.toBe(action.postData);
+    expect(JSON.parse(decryptReply(deriveBodyKey("r", null), params.postData))).toEqual(JSON.parse(action.postData!));
+    // preimage never contains the raw postData json (the encrypted blob is swapMd5-folded)
     expect(signer.lastPreimage).not.toContain("dpCacheType");
     expect(signer.lastPreimage).toContain("postData=");
   });

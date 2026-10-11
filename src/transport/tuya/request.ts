@@ -9,6 +9,7 @@
 /** Injectable POST transport — takes (url, form-body), returns the parsed JSON envelope. Native `fetch` by default. */
 export type TuyaHttpPost = (url: string, body: string) => Promise<unknown>;
 import { buildSignPreimage, type TuyaSigner } from "./sign.js";
+import { deriveBodyKey, encryptBody } from "./et3.js";
 import { randomUUID } from "node:crypto";
 
 /** EU api.json endpoint. (Other regions swap the `tuyaeu` shard, e.g. `tuyaus`/`tuyacn`.) */
@@ -160,7 +161,12 @@ export function buildApiParams(action: TuyaAction, opts: BuildRequestOptions): R
     nd: env.nd,
     deviceCoreVersion: env.deviceCoreVersion,
   };
-  if (action.postData !== undefined) params.postData = action.postData;
+  if (action.postData !== undefined) {
+    params.postData =
+      env.et === "3"
+        ? encryptBody(deriveBodyKey(params.requestId, opts.session.ecode ?? null), action.postData)
+        : action.postData;
+  }
 
   const sign = opts.signer.sign(buildSignPreimage(params));
   return { ...params, sign };

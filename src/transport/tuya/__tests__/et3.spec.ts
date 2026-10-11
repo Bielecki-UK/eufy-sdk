@@ -1,7 +1,7 @@
 import { createCipheriv } from "node:crypto";
 import { gzipSync } from "node:zlib";
 import { describe, expect, it } from "vitest";
-import { deriveBodyKey, decryptReply } from "../et3.js";
+import { deriveBodyKey, decryptReply, encryptBody } from "../et3.js";
 
 /**
  * Seal a plaintext the way the Tuya server does for an et=3 reply: AES-128-GCM with a random 12-byte
@@ -31,6 +31,24 @@ describe("et3 deriveBodyKey", () => {
     expect(deriveBodyKey("req-1", null)).not.toEqual(deriveBodyKey("req-1", "ec-1"));
     expect(deriveBodyKey("req-1", "ec-1")).not.toEqual(deriveBodyKey("req-1", "ec-2"));
     expect(deriveBodyKey("req-1", "ec-1")).not.toEqual(deriveBodyKey("req-2", "ec-1"));
+  });
+});
+
+describe("et3 encryptBody", () => {
+  it("round-trips through decryptReply (same key, same layout)", () => {
+    const key = deriveBodyKey("req-e", "ec-e");
+    const json = JSON.stringify({ devId: "d", dpCacheType: 1 });
+    expect(decryptReply(key, encryptBody(key, json))).toBe(json);
+  });
+
+  it("uses a fresh nonce each call, so the same input gives different ciphertext", () => {
+    const key = deriveBodyKey("req-e", null);
+    expect(encryptBody(key, "{}")).not.toBe(encryptBody(key, "{}"));
+  });
+
+  it("produces a blob a wrong key cannot open", () => {
+    const sealed = encryptBody(deriveBodyKey("req-a", null), "{}");
+    expect(() => decryptReply(deriveBodyKey("req-b", null), sealed)).toThrow();
   });
 });
 

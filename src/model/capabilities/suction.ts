@@ -20,7 +20,7 @@ export const SUCTION_DP = {
  * Suction levels — the app's `SuctionEnum` (`getSuctionEnumByValue`). This is a **fixed** value→label
  * map with **no model argument**: a given int means the same thing on every RoboVac. What varies per
  * model is only **availability** — a device's `get_product_data_point` range may expose a narrower
- * subset (the T2351 catalog lists 0-3) — so the `suction` property stays a raw int rather than being
+ * subset (the T2351 catalog lists `Quiet`–`Max`) — so the `suction` property stays a raw int rather than being
  * constrained per device, and {@link suctionLevelName} names a reported level.
  *
  * `BoostIQ` (4) is a real suction level in this scale. The separate `boostIq`

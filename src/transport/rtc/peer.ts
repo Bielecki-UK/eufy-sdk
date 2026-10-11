@@ -87,9 +87,8 @@ function turnServers(turn: TurnConfig): IceServer[] {
 const UNBUILT_ARCHES: ReadonlySet<string> = new Set(["arm", "ia32"]);
 
 /**
- * `node-datachannel` is an optional peer dependency: only a T9000 station needs the WebRTC transport.
- * It is loaded on the first session. A missing module fails with an install hint, or, on an
- * architecture it has no build for, with the 64-bit requirement, since installing it there cannot help.
+ * Loads `node-datachannel` on the first session, so only a T9000 station pays for it. On an
+ * architecture it has no build for, the failure names the 64-bit requirement.
  */
 async function loadNativePeerFactory(): Promise<NativePeerFactory> {
   let ndc: typeof import("node-datachannel");
@@ -99,8 +98,7 @@ async function loadNativePeerFactory(): Promise<NativePeerFactory> {
     const message = UNBUILT_ARCHES.has(process.arch)
       ? `the WebRTC transport for a HomeBase S1 Pro (T9000) needs 'node-datachannel', which has no build for ` +
         `${process.arch}; a 64-bit OS is needed to drive a T9000`
-      : "the WebRTC transport for a HomeBase S1 Pro (T9000) needs the optional peer dependency " +
-        "'node-datachannel' (`npm install node-datachannel`)";
+      : "the WebRTC transport for a HomeBase S1 Pro (T9000) could not load 'node-datachannel'";
     throw new Error(message, { cause: err });
   }
   return (name, config) => new ndc.PeerConnection(name, config);

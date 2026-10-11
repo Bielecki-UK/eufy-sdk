@@ -44,7 +44,7 @@
 # publishing stops working — the failure looks like an auth error, not a config error.
 #
 # Nothing long-lived is stored in this repo, so there is no token to leak, rotate, or expire. It
-# requires npm ≥ 11.5.1, which is why the toolchain npm is upgraded below, and `id-token: write` in
+# requires npm ≥ 11.5.1, which Node 24.5.0 bundles and a step below asserts, and `id-token: write` in
 # the permissions block.
 #
 # A package's very first publish cannot use this path: npm has no way to pre-register a trusted
@@ -127,16 +127,14 @@ jobs:
           cache: npm
           registry-url: "https://registry.npmjs.org"
 
-      # OIDC trusted publishing needs npm >= 11.5.1, which Node 24.5.0 already bundles. The version is
-      # pinned to the one CI runs: a later 11.x skips the optional peer node-datachannel under
-      # `npm ci`, and the typecheck below then fails.
+      # OIDC trusted publishing needs npm >= 11.5.1, which Node 24.5.0 already bundles, so the release
+      # runs the same npm as CI.
       #
       # The assertion is the point of the step. An npm below the floor fails publishing as an
       # authentication error several steps later, with nothing pointing at the cause; this names it.
       - name: Ensure npm can do OIDC
         run: |
           set -euo pipefail
-          npm install -g npm@11.5.1
           need=11.5.1
           have="$(npm --version)"
           # sort -V puts the lower version first; if that is not `need`, then have < need.

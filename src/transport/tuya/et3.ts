@@ -1,19 +1,14 @@
 /**
  * Tuya `et=3` reply body crypto.
  *
- * An `et=3` `api.json` request is plaintext form params plus a `sign` (see {@link buildSignPreimage}) —
- * there is NO encrypted request blob. The server encrypts only the **response**: the envelope's
- * `result` arrives as a base64 AES-128-GCM blob instead of a JSON object. This module derives the
- * per-reply key and opens that blob; {@link TuyaClient} applies it transparently so callers keep
- * reading `envelope.result` as an object.
+ * An `et=3` `api.json` request is plaintext form params plus a `sign` — there is NO encrypted request
+ * blob. The server encrypts only the **response**: the envelope's `result` arrives as a base64
+ * AES-128-GCM blob instead of a JSON object. This module derives the per-reply key and opens that blob.
  *
- * Blob layout (`layout-std`): `nonce(12) ‖ ciphertext ‖ tag(16)`, no AAD, 12-byte GCM nonce,
- * 16-byte tag. The plaintext is gzip-compressed when it carries the gzip magic (`1f 8b`).
- *
- * Reversed from `libthing_security.so` (`getEncryptoKey`) and `Business.verifyResponseResult`,
- * verified by GCM tag authentication and the md5 reply-sign against captured frames.
+ * Blob layout: `nonce(12) ‖ ciphertext ‖ tag(16)`, no AAD, 12-byte GCM nonce, 16-byte tag. The
+ * plaintext is gzip-compressed when it carries the gzip magic (`1f 8b`).
  */
-import { createDecipheriv, createHash, createHmac } from "node:crypto";
+import { createDecipheriv, createHmac } from "node:crypto";
 import { gunzipSync } from "node:zlib";
 import { resolveSignKey } from "./sign.js";
 
@@ -51,16 +46,4 @@ export function decryptReply(key: Buffer, resultB64: string): string {
   const plain = Buffer.concat([decipher.update(ciphertext), decipher.final()]);
   const text = plain.length >= 2 && plain[0] === 0x1f && plain[1] === 0x8b ? gunzipSync(plain) : plain;
   return text.toString("utf-8");
-}
-
-/**
- * Verify the reply integrity sign: `sign == md5hex("result=" + resultB64 + "||t=" + t + "||" + keyStr)`,
- * where `keyStr` is the 16 ASCII key bytes read as a latin1 string (the key's own characters). A
- * mismatch means a wrong body key or a tampered reply. The comparison is case-insensitive over the
- * 32-hex sign.
- */
-export function verifyReplySign(key: Buffer, resultB64: string, t: string, sign: string): boolean {
-  const preimage = `result=${resultB64}||t=${t}||${key.toString("latin1")}`;
-  const computed = createHash("md5").update(preimage, "utf-8").digest("hex");
-  return computed.toLowerCase() === sign.toLowerCase();
 }

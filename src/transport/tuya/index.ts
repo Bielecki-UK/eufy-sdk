@@ -24,6 +24,5 @@
  */
 export * from "./account.js";
 export * from "./sign.js";
-export * from "./et3.js";
 export * from "./request.js";
 export * from "./client.js";

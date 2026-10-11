@@ -1,7 +1,7 @@
-import { createCipheriv, createHash } from "node:crypto";
+import { createCipheriv } from "node:crypto";
 import { gzipSync } from "node:zlib";
 import { describe, expect, it } from "vitest";
-import { deriveBodyKey, decryptReply, verifyReplySign } from "../et3.js";
+import { deriveBodyKey, decryptReply } from "../et3.js";
 
 /**
  * Seal a plaintext the way the Tuya server does for an et=3 reply: AES-128-GCM with a random 12-byte
@@ -54,19 +54,5 @@ describe("et3 decryptReply", () => {
 
   it("throws when the blob is too short to hold a nonce + tag", () => {
     expect(() => decryptReply(deriveBodyKey("r", null), Buffer.alloc(8).toString("base64"))).toThrow(/too short/);
-  });
-});
-
-describe("et3 verifyReplySign", () => {
-  it("accepts the md5 reply sign and rejects a tampered one", () => {
-    const key = deriveBodyKey("req-s", "ec-s");
-    const resultB64 = seal(key, JSON.stringify({ ok: 1 }));
-    const t = "1700000000000";
-    const sign = createHash("md5")
-      .update(`result=${resultB64}||t=${t}||${key.toString("latin1")}`, "utf-8")
-      .digest("hex");
-    expect(verifyReplySign(key, resultB64, t, sign)).toBe(true);
-    expect(verifyReplySign(key, resultB64, t, sign.toUpperCase())).toBe(true);
-    expect(verifyReplySign(key, resultB64, t, "0".repeat(32))).toBe(false);
   });
 });

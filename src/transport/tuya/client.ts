@@ -9,7 +9,7 @@
 import { randomBytes, createHash, createPublicKey, publicEncrypt, constants } from "node:crypto";
 import { deriveTuyaAccount, type TuyaAccount } from "./account.js";
 import { TUYA_CHKEY, HmacSigner, type TuyaSigner } from "./sign.js";
-import { deriveBodyKey, decryptReply, verifyReplySign } from "./et3.js";
+import { deriveBodyKey, decryptReply } from "./et3.js";
 import {
   buildApiParams,
   buildGetDeviceDpsAction,
@@ -127,9 +127,9 @@ export class TuyaClient {
    * Build + POST an action, returning the parsed envelope. Requires a working signer.
    *
    * On an `et=3` reply the envelope's `result` is a base64 AES-128-GCM blob, not an object; this
-   * decrypts it (keyed off the request's `requestId` and the session's `ecode`) and returns the
-   * decrypted inner envelope, so callers read `result` as an object regardless. A non-string `result`
-   * (an error, or an already-plain reply) passes through untouched. See `et3.ts`.
+   * decrypts it (keyed off the request's `requestId` and the session's `ecode`, via {@link deriveBodyKey}
+   * and {@link decryptReply}) and returns the decrypted inner envelope, so callers read `result` as an
+   * object regardless. A non-string `result` (an error, or an already-plain reply) passes through untouched.
    */
   async call<T = unknown>(action: TuyaAction): Promise<TuyaEnvelope<T>> {
     const params = this.buildRequest(action);
@@ -138,26 +138,14 @@ export class TuyaClient {
   }
 
   /**
-   * Decode an et=3 reply in place. When `result` is a non-empty string it is the encrypted blob:
-   * verify the reply sign (when present), decrypt, and parse. The plaintext is itself a standard
-   * `{success, t, result}` envelope, which becomes the returned envelope; anything else is wrapped
-   * so `result` carries the decoded payload.
+   * Decode an et=3 reply. When `result` is a non-empty string it is the encrypted blob: decrypt and
+   * parse it (a wrong key or tampered blob fails the GCM tag in {@link decryptReply} and throws). The
+   * plaintext is itself the standard `{success, t, result}` envelope, which becomes the returned one.
    */
   private decodeReply<T>(env: TuyaEnvelope<unknown>, requestId: string): TuyaEnvelope<T> {
     if (typeof env.result !== "string" || env.result === "") return env as TuyaEnvelope<T>;
     const key = deriveBodyKey(requestId, this.session.ecode ?? null);
-    if (
-      typeof env.sign === "string" &&
-      env.t !== undefined &&
-      !verifyReplySign(key, env.result, String(env.t), env.sign)
-    ) {
-      throw new Error("tuya et=3 reply sign mismatch — wrong body key (check ecode) or tampered reply");
-    }
-    const inner = JSON.parse(decryptReply(key, env.result)) as unknown;
-    if (inner !== null && typeof inner === "object" && ("result" in inner || "success" in inner)) {
-      return inner as TuyaEnvelope<T>;
-    }
-    return { ...env, result: inner as T };
+    return JSON.parse(decryptReply(key, env.result)) as TuyaEnvelope<T>;
   }
 
   /**

@@ -53,7 +53,7 @@ export interface TuyaSession {
   chKey: string;
   /**
    * Per-login encryption code (`User.ecode`), read from the decrypted `login.reg` reply. Absent until
-   * login completes; it keys the et=3 reply decryption for every session call (see `et3.ts`).
+   * login completes; it keys the et=3 reply decryption for every session call (see {@link deriveBodyKey}).
    */
   ecode?: string;
 }
@@ -177,8 +177,6 @@ export interface TuyaEnvelope<T = unknown> {
   errorMsg?: string;
   /** Occasionally present status string. */
   status?: string;
-  /** md5 reply-integrity sign over the encrypted `result` + `t` + body key (et=3 replies). */
-  sign?: string;
 }
 
 /** Transport knobs for {@link sendApiRequest}. */

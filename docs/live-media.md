@@ -100,16 +100,10 @@ P2P video events preserve the source header's unsigned 32-bit `sourceTimestamp`.
 Object-mode `openReadable({ objectMode: true })` preserves the same frame metadata;
 byte-mode `openReadable()` returns only video bytes.
 
-A host can retain source-clock differences separately from its local receipt times.
-Delivery bursts and local scheduling change receipt timing without necessarily changing
-source cadence. Assigning media timestamps from receipt times encodes that jitter;
-guessing a constant frame rate can cause media-clock drift. Timestamped egress and
-playout policy belong to the host.
-
 The field carries the source value unchanged. Its unit, clock origin and relation to
 capture/presentation time are unspecified; it is not an absolute timestamp or a
-cross-camera synchronization clock. Interpret it only with device/stream evidence,
-handle unsigned 32-bit wrap and reset timing state when a source session changes.
+cross-camera synchronization clock. The unsigned 32-bit value can wrap, and its
+clock can reset when the source session changes.
 
 ### The source reconfigures mid-session
 

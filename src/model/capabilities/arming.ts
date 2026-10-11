@@ -129,8 +129,28 @@ export const ARMING_CMD = {
  */
 const DEVICE_NOTIFY_FLAG = 0x08;
 
-/** The guard modes whose device notification is read and written: both replayed on a T8010. */
-export type DeviceNotificationMode = Extract<AlarmDelayMode, "home" | "away">;
+/**
+ * The guard modes whose device notification is read and written. Home and away are replayed on a T8010;
+ * `custom1` (wire 3) is captured on a T8170, whose own params report it on 1148.
+ */
+export type DeviceNotificationMode = Extract<ArmingMode, "home" | "away" | "custom1">;
+
+/**
+ * The standalone cameras whose own Device Control write is captured: a T8170 sends cmd 1255 to itself with
+ * only its own entry `{mode_id, devices:[{device_channel, action}]}`, and its next param report carries
+ * the new flags (2026-10-09, 2026-10-11).
+ */
+const STANDALONE_ACTION_MODELS: ReadonlySet<string> = new Set(["T8170"]);
+
+/**
+ * A device's own flags for `mode`, as its params report them: Home on 1225, Away on 1239, custom1 on 1148,
+ * plain flags without the `mode_id << 24` the write carries. Every device reports these, standalone or
+ * attached; a standalone camera has no table, so they are its only source.
+ */
+function ownAction(read: CapabilityStateReader, mode: DeviceNotificationMode): number | undefined {
+  const value = Number(read(`${mode}Action`)?.value);
+  return Number.isInteger(value) && value >= 0 ? value : undefined;
+}
 
 /** One mode's action table as reported; every field beside `devices` is carried through untouched. */
 type ActionTable = Record<string, unknown> & { devices: { device_channel: number; action: number }[] };
@@ -311,6 +331,17 @@ function alarmDelayCommand(mode: AlarmDelayMode, config: AlarmDelayConfig, ctx: 
   return setJsonRaw(ARMING_CMD.SET_ALL_ACTION, data, ctx, STATION_CHANNEL);
 }
 
+/**
+ * A standalone camera's one-entry table for `mode`, built from its own reported flags: what the app sends it.
+ * `undefined` where the camera reports none for that mode.
+ */
+function ownTable(read: CapabilityStateReader, mode: DeviceNotificationMode, channel: number): ActionTable | undefined {
+  const flags = ownAction(read, mode);
+  if (flags === undefined) return undefined;
+  const wire = ARMING_MODE_WIRE[mode];
+  return { mode_id: wire, devices: [{ device_channel: channel, action: (wire << 24) | flags }] };
+}
+
 /** How long a reported action table may lag a write before it is trusted again: it follows within 15 s. */
 const ACTION_TABLE_LAG_MS = 15_000;
 
@@ -419,13 +450,18 @@ export const ARMING_MEMBERS = {
    * or the table does not list `channel`. A device's channel is `EufyDevice.channel`.
    */
   deviceNotification: method(
-    ({ read }) =>
+    ({ ctx, read }) =>
       (mode: DeviceNotificationMode, channel: number): boolean | undefined => {
-        const action = actionTable(read, mode)?.devices.find((d) => d.device_channel === channel)?.action;
+        const action =
+          ctx.model === "T8010"
+            ? actionTable(read, mode)?.devices.find((d) => d.device_channel === channel)?.action
+            : channel === ctx.channel
+              ? ownAction(read, mode)
+              : undefined;
         return typeof action === "number" ? (action & DEVICE_NOTIFY_FLAG) !== 0 : undefined;
       },
-    "Whether the device on a channel sends a push notification in a guard mode (home/away).",
-    (ctx) => ctx.model === "T8010",
+    "Whether the device on a channel sends a push notification in a guard mode (home/away/custom1).",
+    (ctx) => ctx.model === "T8010" || STANDALONE_ACTION_MODELS.has(ctx.model ?? ""),
   ),
 
   /**
@@ -440,8 +476,14 @@ export const ARMING_MEMBERS = {
       const sent = new Map<DeviceNotificationMode, { table: ActionTable; at: number }>();
       return (mode: DeviceNotificationMode, channel: number, on: boolean): Promise<void> => {
         const last = sent.get(mode);
-        const observed = read(`${mode}ActionTable`)?.ts ?? 0;
-        const base = last && observed < last.at + ACTION_TABLE_LAG_MS ? last.table : actionTable(read, mode);
+        const reported = ctx.model === "T8010" ? `${mode}ActionTable` : `${mode}Action`;
+        const observed = read(reported)?.ts ?? 0;
+        const base =
+          last && observed < last.at + ACTION_TABLE_LAG_MS
+            ? last.table
+            : ctx.model === "T8010"
+              ? actionTable(read, mode)
+              : ownTable(read, mode, ctx.channel);
         const table = withDeviceNotification(base, channel, on);
         if (!table) {
           return Promise.reject(
@@ -458,8 +500,8 @@ export const ARMING_MEMBERS = {
         });
       };
     },
-    "Turn the push notification of the device on a channel on or off in a guard mode (home/away).",
-    (ctx) => ctx.model === "T8010",
+    "Turn the push notification of the device on a channel on or off in a guard mode (home/away/custom1).",
+    (ctx) => ctx.model === "T8010" || STANDALONE_ACTION_MODELS.has(ctx.model ?? ""),
   ),
 } as const satisfies Members;
 

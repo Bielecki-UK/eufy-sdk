@@ -179,7 +179,7 @@ export const SECURITY_PARAMS: Record<number, ParamDef> = {
   1148: {
     name: "custom1Action",
     type: "number",
-    provenance: "apk",
+    provenance: "verified",
   },
   1149: {
     name: "custom2Action",
@@ -394,7 +394,7 @@ export const SECURITY_PARAMS: Record<number, ParamDef> = {
   1225: {
     name: "homeAction",
     type: "number",
-    provenance: "apk",
+    provenance: "verified",
   },
   1229: {
     name: "param1229",

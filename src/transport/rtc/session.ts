@@ -155,8 +155,9 @@ export class RtcSession extends EventEmitter<RtcSessionEvents> {
   }
 
   /**
-   * Trickle one local candidate, or the empty end-of-candidates. The native peer reports candidates from
-   * its own thread, after the signalling socket may have closed; with no socket there is nobody to tell.
+   * Trickle one local candidate, or the empty end-of-candidates. The native peer can report one after the
+   * signalling socket has closed, and sending then throws inside a native callback, where the throw can't
+   * be caught and aborts the process. A candidate with no open socket is dropped.
    */
   private trickle(candidate: string): void {
     if (!this.signaling.isOpen) return;

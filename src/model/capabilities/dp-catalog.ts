@@ -72,7 +72,7 @@ export function parseDpCatalog(raw: unknown): DpCatalog {
 }
 
 /**
- * Parse an enum entry's `property` blob into the integer values it allows.
+ * Parse an enum entry's `property` blob into the range member strings it allows.
  *
  * The blob is a JSON string in the Tuya schema convention — `{"range":["Quiet","Standard"]}` — whose
  * members are strings, names or numeric. A bare array, or an array already parsed out of JSON, is
@@ -80,7 +80,6 @@ export function parseDpCatalog(raw: unknown): DpCatalog {
  */
 function parseEnumRange(values: unknown): readonly string[] {
   if (values === null || values === undefined) return [];
-  // Plain array of numbers or numeric strings
   if (Array.isArray(values)) return toMemberArray(values);
   // JSON-stringified: "[0,1,2,3]" or "{\"range\":[\"0\",\"1\",\"2\",\"3\"]}"
   if (typeof values === "string") {

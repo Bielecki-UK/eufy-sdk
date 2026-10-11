@@ -49,8 +49,7 @@ const ALL_SUCTION_LEVELS: readonly SuctionLevelValue[] = [0, 1, 2, 3, 4, 5];
  */
 function levelFromCatalog(member: string): SuctionLevelValue | undefined {
   if (Object.hasOwn(SuctionLevel, member)) return SuctionLevel[member as keyof typeof SuctionLevel];
-  const n = Number(member);
-  return Number.isInteger(n) && n in SUCTION_LABEL ? (n as SuctionLevelValue) : undefined;
+  return Object.hasOwn(SUCTION_LABEL, member) ? (Number(member) as SuctionLevelValue) : undefined;
 }
 
 /**
@@ -73,8 +72,8 @@ export type SuctionActions = Surface<typeof SUCTION_MEMBERS> & {
    * range for DP 158. Narrower than the full six {@link SuctionLevel} values on many models — a T2351's
    * catalog lists `Quiet`, `Standard`, `Turbo` and `Max`, which answers `[0, 1, 2, 3]`.
    *
-   * `undefined` when the catalog is absent or does not cover DP 158. Only meaningful on devices where
-   * `setSuctionLevel` is installed (AIoT vacuums).
+   * `undefined` when the catalog is absent, does not cover DP 158, or lists only members outside the
+   * known scale. Only meaningful on devices where `setSuctionLevel` is installed (AIoT vacuums).
    */
   readonly supportedLevels?: readonly SuctionLevelValue[];
 };
@@ -151,13 +150,15 @@ export const SUCTION: CapabilityModule = {
   },
   /**
    * The per-model level range — sourced from the SKU's `get_product_data_point` catalog for DP 158
-   * when available. `undefined` when no catalog entry exists for DP 158. `setSuctionLevel` is only
+   * when available. `undefined` when no catalog entry exists for DP 158, or when no listed member maps
+   * to a known level (so a caller never reads `[]` as "nothing selectable"). `setSuctionLevel` is only
    * installed on AIoT devices (gated by `available: isAiotVacuum` on the `level` entry), so
    * `supportedLevels` is harmless data on a non-AIoT device.
    */
   actions({ ctx }: MemberDeps): CapabilityActions {
     const catalogRange = ctx.dpCatalog?.enumRanges.get(SUCTION_DP.SUCTION);
-    const supportedLevels = catalogRange?.map(levelFromCatalog).filter((v): v is SuctionLevelValue => v !== undefined);
+    const levels = catalogRange?.flatMap((m) => levelFromCatalog(m) ?? []);
+    const supportedLevels = levels?.length ? levels : undefined;
     return { supportedLevels } as unknown as CapabilityActions;
   },
 };

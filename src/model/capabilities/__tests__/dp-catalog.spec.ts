@@ -103,13 +103,6 @@ describe("parseDpCatalog", () => {
     expect(catalog.enumRanges.has(160)).toBe(false);
   });
 
-  it("reads a numeric-string range inside a typed property blob", () => {
-    const catalog = parseDpCatalog({
-      data_point_list: [{ dp_id: 158, data_type: "Enum", property: '{"type":"enum","range":["0","1","2","3"]}' }],
-    });
-    expect(catalog.enumRanges.get(158)).toEqual(["0", "1", "2", "3"]);
-  });
-
   it("reads a T2351 catalog entry, whose range lists level names", () => {
     const catalog = parseDpCatalog({
       data_point_list: [

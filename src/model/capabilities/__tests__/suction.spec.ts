@@ -82,6 +82,12 @@ describe("suction — supportedLevels from dpCatalog", () => {
     expect(acts.supportedLevels).toEqual([0, 3]);
   });
 
+  it("returns undefined (not []) when the range lists only members off the known scale", () => {
+    const catalog: DpCatalog = { enumRanges: new Map([[SUCTION_DP.SUCTION, ["Low", "High"]]]) };
+    const { acts } = bind<SuctionActions>("suction", suctionCtx(undefined, "eufy_home", catalog));
+    expect(acts.supportedLevels).toBeUndefined();
+  });
+
   it("returns undefined when the catalog has no entry for DP 158", () => {
     const catalog: DpCatalog = { enumRanges: new Map() };
     const { acts } = bind<SuctionActions>("suction", suctionCtx(undefined, "eufy_home", catalog));

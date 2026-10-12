@@ -285,6 +285,9 @@ export interface P2PRouterDeps {
 }
 
 export class P2PCommandRouter {
+  /** Identical payload queries have no request id and cannot be outstanding together. */
+  private readonly pendingPayloadQueries = new Set<string>();
+
   /** P2P session lifecycle: on-demand open + battery-aware idle-detach + refcount, per session key. */
   private readonly manager: SessionManager;
   /** Error objects already forwarded while a station startup awaits the same session signal. */
@@ -685,6 +688,13 @@ export class P2PCommandRouter {
       case "p2p-privacy-burst":
         await this.sendPrivacyBurst(sn, cmd.enabled);
         return;
+      case "set-payload-once": {
+        const { session, channel } = await this.resolveSession(sn, { waitLevel2: true });
+        if (!cmd.accountId) throw new Error("set-payload-once requires member identity");
+        if (!session.sendControlLevel2(cmd.cmd, channel, cmd.accountId, cmd.payload, 0))
+          throw new Error("set-payload-once send failed");
+        return;
+      }
       case "ff09-actuate":
         await this.sendFf09Actuate(sn, cmd);
         return;
@@ -1356,8 +1366,15 @@ export class P2PCommandRouter {
    * device channel, then resolves with the reply frame's `payload` — the `NOTIFY_PAYLOAD` (1351)
    * whose JSON `cmd` echoes `subCmd` — decoded off the session `data` event. Needs the level-2 key.
    */
-  async p2pQuery(sn: string, subCmd: number, opts: { timeoutMs?: number } = {}): Promise<Record<string, unknown>> {
-    const { session, channel, accountId } = await this.resolveSession(sn, { waitLevel2: true });
+  async p2pQuery(
+    sn: string,
+    subCmd: number,
+    opts: { timeoutMs?: number; payload?: Record<string, unknown>; accountId?: string } = {},
+  ): Promise<Record<string, unknown>> {
+    const { session, parentSn, channel, accountId } = await this.resolveSession(sn, { waitLevel2: true });
+    const key = `${parentSn}:${channel}:${subCmd}`;
+    if (this.pendingPayloadQueries.has(key)) throw new Error("p2p query already pending on this channel");
+    this.pendingPayloadQueries.add(key);
     const timeoutMs = opts.timeoutMs ?? 15000;
     return await new Promise<Record<string, unknown>>((resolve, reject) => {
       const timer = setTimeout(() => {
@@ -1366,7 +1383,14 @@ export class P2PCommandRouter {
       }, timeoutMs);
       const onData = (f: P2PFrame): void => {
         const j = f.json as { cmd?: number; payload?: unknown } | undefined;
-        if (j?.cmd === subCmd && j.payload && typeof j.payload === "object") {
+        if (
+          f.channel === channel &&
+          f.commandId === CommandType.CMD_NOTIFY_PAYLOAD &&
+          j?.cmd === subCmd &&
+          j.payload &&
+          typeof j.payload === "object" &&
+          !Array.isArray(j.payload)
+        ) {
           cleanup();
           resolve(j.payload as Record<string, unknown>);
         }
@@ -1374,13 +1398,23 @@ export class P2PCommandRouter {
       const cleanup = (): void => {
         clearTimeout(timer);
         session.off("data", onData);
+        session.off("close", onClose);
+        this.pendingPayloadQueries.delete(key);
       };
+      const onClose = (): void => {
+        cleanup();
+        reject(new Error("p2p query session closed"));
+      };
+      session.on("close", onClose);
       session.on("data", onData);
       // SET_PAYLOAD(1350) wrapping {account_id, cmd:subCmd, mChannel, mValue3:0, payload:{}} on the device channel.
       // sendSetPayload can throw synchronously (e.g. "not connected"); clean up the listener + timer
       // so they don't dangle until the timeout, then propagate the failure.
       try {
-        session.sendSetPayload(subCmd, {}, { accountId, channel });
+        if (opts.payload) {
+          if (!session.sendControlLevel2(subCmd, channel, opts.accountId ?? accountId, opts.payload, 0))
+            throw new Error("p2p query send failed");
+        } else session.sendSetPayload(subCmd, {}, { accountId, channel });
       } catch (e) {
         cleanup();
         reject(e instanceof Error ? e : new Error(String(e)));

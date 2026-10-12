@@ -1,9 +1,10 @@
+import { isVideoSmartLock } from "../device-family.js";
 import { asBool } from "../../core/util.js";
 import { LockPushEvent } from "../push-events.js";
 import { describeDevice } from "./access.js";
 import { method, propertiesOf, provided, type Members, type Surface } from "./members.js";
 import type { AvailabilityContext, CapabilityModule, CommandContext, InboundSignal } from "./types.js";
-import type { Command, CommandSink, AutoLockSnapshot } from "../../core/contracts.js";
+import type { Command, CommandSink, AutoLockSnapshot, MediaProvider } from "../../core/contracts.js";
 
 /**
  * Setting-id selectors for the compact `ff09-setting-toggle` write — this capability's OWN wire
@@ -48,15 +49,33 @@ export const LOCK_SETTING_ID = {
  */
 export type LockActions = Surface<typeof LOCK_MEMBERS>;
 
+/** Native video-lock command vocabulary verified on T8530 attached to HomeBase 3. */
+const VIDEO_LOCK_CMD = { ACTUATE: 1961, STATUS: 1955, NOTIFY: 1351 } as const;
+
 /**
  * The actuation intent, or a refusal naming what is missing. Identity is a genuine precondition — the
  * frame carries the member fields — and a generated "not a valid value" message would misreport it.
  */
 function actuate(engage: boolean, ctx: CommandContext, sink: CommandSink): Promise<void> {
-  if (!ctx.adminUserId || !ctx.shortUserId) {
+  if (!ctx.adminUserId || !ctx.shortUserId || (isVideoSmartLock(ctx) && !ctx.accountName)) {
     return Promise.reject(
-      new Error(`lock: missing member identity (admin_user_id/short_user_id) [${describeDevice(ctx)}]`),
+      new Error(
+        `lock: missing member identity (admin_user_id/short_user_id, and user name on video locks) [${describeDevice(ctx)}]`,
+      ),
     );
+  }
+  if (isVideoSmartLock(ctx)) {
+    return sink.dispatch({
+      kind: "set-payload-once",
+      cmd: VIDEO_LOCK_CMD.ACTUATE,
+      accountId: ctx.adminUserId,
+      payload: {
+        shortUserId: ctx.shortUserId,
+        slOperation: engage ? 1 : 0,
+        userId: ctx.adminUserId,
+        userName: ctx.accountName,
+      },
+    });
   }
   return sink.dispatch({
     kind: "ff09-actuate",
@@ -87,7 +106,41 @@ function settingToggle(settingId: number, name: string, enabled: boolean, ctx: C
  * The compact toggles are only known on the P2P video lock; the MQTT garage door does not expose them in
  * the app, so offering them there would guess a frame shape that likely does not exist.
  */
-const overP2p = (ctx: AvailabilityContext): boolean => ctx.hasP2p === true;
+const overP2p = (ctx: AvailabilityContext): boolean => ctx.hasP2p === true && !isVideoSmartLock(ctx);
+
+/** Live status read; unknown states remain unknown and device refusals reject. */
+async function refreshStatus(ctx: CommandContext, media?: MediaProvider): Promise<boolean | undefined> {
+  if (!ctx.adminUserId || !ctx.timezone || !media?.p2pQuery)
+    throw new Error("lock.refreshStatus: missing identity, reported timezone or query provider");
+  const payload = await media.p2pQuery(VIDEO_LOCK_CMD.STATUS, {
+    payload: { timezone: ctx.timezone },
+    accountId: ctx.adminUserId,
+  });
+  if (payload.code !== 0) throw new Error(`lock.refreshStatus: device result ${String(payload.code)}`);
+  return nativeState(payload.slState);
+}
+
+/** Only the two observed settled states carry a boolean. */
+function nativeState(raw: unknown): boolean | undefined {
+  if (raw === 3 || raw === "3") return false;
+  if (raw === 4 || raw === "4") return true;
+  return undefined;
+}
+
+/** Successful video-lock status reports, attributed by the resolved device type. */
+function nativeReport(signal: InboundSignal): Record<string, unknown> | undefined {
+  if (
+    signal.source !== "p2p-frame" ||
+    !isVideoSmartLock(signal) ||
+    signal.commandId !== VIDEO_LOCK_CMD.NOTIFY ||
+    signal.json?.cmd !== VIDEO_LOCK_CMD.STATUS
+  )
+    return undefined;
+  const payload = signal.json.payload;
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return undefined;
+  const report = payload as Record<string, unknown>;
+  return report.code === 0 ? report : undefined;
+}
 
 /**
  * Every `lock` feature, declared once.
@@ -117,7 +170,7 @@ export const LOCK_MEMBERS = {
     kind: "boolean",
     provenance: "verified",
     writtenElsewhere: true,
-    coerce: (raw) => String(raw).trim() === "4",
+    coerce: (raw) => nativeState(raw) ?? String(raw),
     description: "Lock state, true=locked (verified: param 6000, 4=locked, 3=unlocked).",
   },
   /**
@@ -147,14 +200,14 @@ export const LOCK_MEMBERS = {
     description: "Lock signal strength (verified: param 1141 = RSSI).",
   },
 
-  /** Lock the deadbolt/door. Fire-and-forget — rejects only on missing member identity, never on a device timeout. */
+  /** Lock the deadbolt/door. Resolves after sending; does not confirm physical state. Use refreshStatus when available. */
   lock: method(
     ({ ctx, sink }) =>
       (): Promise<void> =>
         actuate(true, ctx, sink),
     "Lock the deadbolt/door.",
   ),
-  /** Unlock the deadbolt/door. Fire-and-forget — rejects only on missing member identity. */
+  /** Unlock the deadbolt/door. Resolves after sending; does not confirm physical state. */
   unlock: method(
     ({ ctx, sink }) =>
       (): Promise<void> =>
@@ -188,6 +241,7 @@ export const LOCK_MEMBERS = {
         });
       },
     "Read-modify-write the auto-lock setting, preserving the fields it does not change.",
+    (ctx) => !isVideoSmartLock(ctx),
   ),
 
   /**
@@ -296,6 +350,18 @@ export const LOCK_MEMBERS = {
     write: (v, ctx) => settingToggleCommand(LOCK_SETTING_ID.ONE_TOUCH_REAR_LOCK, v, ctx),
   },
 
+  /** Read the current device-reported state; undefined means no settled locked/unlocked state. */
+  refreshStatus: {
+    ...method(
+      ({ ctx, media }) =>
+        () =>
+          refreshStatus(ctx, media),
+      "Read the current lock state from the device.",
+      isVideoSmartLock,
+    ),
+    answers: true,
+  },
+
   /**
    * Read the device's current auto-lock settings via a live `GET_SETTINGS` round-trip — the SAME read
    * `setAutoLock` does internally, exposed standalone with no write attached. Works over BOTH transports.
@@ -307,7 +373,7 @@ export const LOCK_MEMBERS = {
   getAutoLockState: {
     ...provided(
       "ff09Settings",
-      (f) => (): Promise<AutoLockSnapshot> => f.getAutoLockState(),
+      (f, { ctx }) => (isVideoSmartLock(ctx) ? undefined : (): Promise<AutoLockSnapshot> => f.getAutoLockState()),
       "Read the current auto-lock settings via a live round-trip.",
     ),
     answers: true,
@@ -353,6 +419,27 @@ export const LOCK: CapabilityModule = {
   description: "Smart-lock locked/unlocked state and battery.",
   members: LOCK_MEMBERS,
   properties: propertiesOf(LOCK_MEMBERS),
+  decodeState(signal) {
+    const report = nativeReport(signal);
+    if (!report) return null;
+    const params: Record<number, string> = {};
+    if (typeof report.slState === "string" || typeof report.slState === "number") params[6000] = String(report.slState);
+    if (
+      report.slBattery !== undefined &&
+      report.slBattery !== "" &&
+      (typeof report.slBattery === "string" || typeof report.slBattery === "number")
+    ) {
+      const battery = Number(report.slBattery);
+      if (Number.isFinite(battery) && battery >= 0 && battery <= 100) params[6001] = String(battery);
+    }
+    return { params };
+  },
+  decodeEvent(signal) {
+    const report = nativeReport(signal);
+    const locked = report && nativeState(report.slState);
+    return locked === undefined ? null : { event: "lockState", payload: { locked } };
+  },
+  stateEvents: [{ event: "lockState", field: "locked" }],
   // Lock state is reported via param 6000 (verified: 4=locked, 3=unlocked); the model name (lock/safe) is a
   // signal, and every lock-codec device has the lock capability as its baseline.
   detection: { evidenceParams: [6000], modelHints: [/lock/i, /safe/i], codecs: ["lock"] },

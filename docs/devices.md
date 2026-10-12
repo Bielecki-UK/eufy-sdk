@@ -57,7 +57,7 @@ await dev.ptz?.()?.rotate(PtzDirection.left, 1.0); // PTZ step — see the PTZ g
 await dev.light?.()?.setBrightness(50); // spotlight 1–100
 await dev.arming?.()?.setMode(ArmingMode.home); // guard mode
 await dev.lock?.()?.lock();
-await dev.lock?.()?.setAutoLock(true, 60); // enable, 60s delay
+await dev.lock?.()?.setAutoLock?.(true, 60); // enable, 60s delay
 await dev.lock?.()?.setRainMode?.(true); // P2P video lock only — optional accessor
 ```
 
@@ -245,3 +245,37 @@ Two things to rely on:
 Because it rides the poll interval, a pairing shows up within that window rather than instantly.
 
 Next: [Events](/events) · [Live media](/live-media).
+
+## Video Smart Lock S330 (T8530)
+
+T8530 (cloud device type 55) uses native video-lock control and status rather than the compact
+settings protocol used by T8531 and T85D0. Lock and unlock send one command each, without replay.
+Their completion means the SDK sent the request; it does not confirm acceptance or physical movement.
+Use `refreshStatus()` for an explicit live read, which also updates `locked`, battery, and realtime
+property events on the device. A settled state reads `true` for locked or `false` for unlocked; other
+states read `undefined`. A status error rejects, and a timeout does not fabricate a state.
+
+```ts
+const lock = dev.lock?.();
+await lock?.lock();
+const locked = await lock?.refreshStatus?.();
+console.log(locked);
+```
+
+The status read requires the station's or device's reported vendor timezone. The SDK does not guess
+one from the host. Auto-lock settings and Rain Mode are absent on this family; PIN management,
+schedules, calibration, and other settings are unverified. Other lock families retain their existing
+command paths.
+
+Protocol evidence: a separate diagnostic implementation drove lock and unlock on a T8530 attached to
+HomeBase 3 (T8030), on 2026-10-12. Both operations received transport acknowledgements and command
+result 0, followed by independent status reads and physical confirmation. The native actuation payload
+carried numeric operation 1 for lock and 0 for unlock, plus resolved member identity; the independent
+status response reported state 4 and 3 respectively, and battery as a percentage. That establishes
+the protocol on this single topology, not every firmware or bridge variant. The SDK implementation
+in this change has offline coverage and has not itself been deployed to hardware.
+
+The raw command-result acknowledgement has no inner command or request id, so it is not used to
+confirm this command or mutate state. Live status is matched to its station session, device channel,
+and native status command. Overlapping identical reads on one channel are refused because the reply
+contains no request id; a delayed report cannot establish which read caused it.

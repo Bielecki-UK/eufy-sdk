@@ -46,10 +46,12 @@ async function main(): Promise<void> {
       break;
     case "autolock-on":
       console.log("enabling auto-lock (60s delay) …");
+      if (!lock.setAutoLock) throw new Error(`${sn} has no setAutoLock`);
       await lock.setAutoLock(true, 60);
       break;
     case "autolock-off":
       console.log("disabling auto-lock …");
+      if (!lock.setAutoLock) throw new Error(`${sn} has no setAutoLock`);
       await lock.setAutoLock(false);
       break;
     case "rain-on":

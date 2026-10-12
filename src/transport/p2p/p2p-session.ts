@@ -93,7 +93,11 @@ export const CONNECT_TIMEOUT_MS = 15_000;
  * session's channel-taking methods resolve an omitted channel to.
  */
 export const STATION_CHANNEL = 255;
-/** CMD_GATEWAYINFO — sent once on connect to prompt the station to start reporting. */
+/**
+ * CMD_GATEWAYINFO — sent once on connect to prompt the station to start reporting. The reply carries the
+ * level-2 key envelope in one layout under either seal: level-1 encrypted (HomeBases, floodlight cameras) or
+ * in the clear (signCode 0, standalone indoor cameras).
+ */
 const CMD_GATEWAYINFO = 1100;
 const CMD_START_REALTIME_MEDIA = 1003;
 const CMD_STOP_REALTIME_MEDIA = 1004;
@@ -2197,7 +2201,7 @@ export class P2PSession extends EventEmitter {
     // key. If a cipher-key resolver is configured, negotiate the key once (async, fire-and-forget).
     if (
       header.commandId === CMD_GATEWAYINFO &&
-      header.signCode === 1 &&
+      header.signCode <= 1 &&
       !this.level2Key &&
       !this.level2Negotiating &&
       this.cfg.resolveCipherKey

@@ -165,4 +165,13 @@ describe("station-owned RTC command routing", () => {
     const other = fixture(DeviceType.HB3);
     expect(other.internals.rtcMediaFor(CAMERA)).toBeUndefined();
   });
+
+  it("serves no RTC media for a camera attached to a T8N00, whose route carries commands only", () => {
+    const { internals, devices } = fixture();
+    devices[0]!.model = "T8N00";
+    devices[0]!.raw = { member: { admin_user_id: "synthetic-admin" } };
+    const media = vi.spyOn(internals.rtc, "mediaProviderFor").mockReturnValue({ live: vi.fn() });
+    expect(internals.rtcMediaFor(CAMERA)).toBeUndefined();
+    expect(media).not.toHaveBeenCalled();
+  });
 });

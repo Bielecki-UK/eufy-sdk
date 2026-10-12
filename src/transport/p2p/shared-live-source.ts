@@ -142,12 +142,13 @@ export interface SharedLiveSourceOptions {
    */
   onStopped?: () => void;
   /**
-   * A media start was abandoned unacknowledged before anything was delivered, so this session is not being
-   * heard. The owner is asked for a replacement and calls {@link SharedLiveSource.rewarm} once it has one.
+   * This session is not serving the warm-up: a media start was abandoned unacknowledged, or forced starts went
+   * unanswered by any media, before anything was delivered. The owner answers whether it is replacing the
+   * session, and calls {@link SharedLiveSource.rewarm} once it has the replacement.
    *
-   * Asked at most once per warm-up: further abandonments are the same session saying the same thing.
+   * Asked at most once per warm-up: further evidence is the same session saying the same thing.
    */
-  onSessionUnreachable?: () => void;
+  onSessionUnreachable?: () => boolean;
 }
 
 /**
@@ -578,14 +579,25 @@ export class SharedLiveSource {
    * started on.
    */
   private onStartUnacknowledged(): void {
-    if (this.disposed || this.sessionReplacementAsked) return;
-    if (this.delivered.video || this.delivered.audio || this.delivered.keyframe) return;
-    if (!this.opts.onSessionUnreachable) return;
+    this.askForFreshSession("start unacknowledged");
+  }
+
+  /**
+   * Ask the owner for a replacement session where nothing has been delivered yet, answering whether one is coming.
+   *
+   * The retry ticker is stopped only once the owner has said it is replacing the session: an owner that cannot
+   * (an attached camera shares its HomeBase session) leaves the source re-issuing as it always did.
+   */
+  private askForFreshSession(why: string): boolean {
+    if (this.disposed || this.sessionReplacementAsked) return false;
+    if (this.delivered.video || this.delivered.audio || this.delivered.keyframe) return false;
+    if (!this.opts.onSessionUnreachable) return false;
     this.sessionReplacementAsked = true;
-    this.logger.debug(`${this.tag} start unacknowledged with nothing delivered — asking for a fresh session`);
+    if (!this.opts.onSessionUnreachable()) return false;
+    this.logger.debug(`${this.tag} ${why} with nothing delivered — warming again on a fresh session`);
     if (this.warmRetryTimer) clearInterval(this.warmRetryTimer);
     this.warmRetryTimer = undefined;
-    this.opts.onSessionUnreachable();
+    return true;
   }
 
   /**
@@ -630,14 +642,24 @@ export class SharedLiveSource {
    * {@link fruitlessReissues} for why one is not enough and why what the stream delivered earlier is not
    * evidence. Once media arrives the keepalive is what is wanted, and an attached camera re-sends a full start
    * either way.
+   *
+   * A forced start that a whole interval later has still produced nothing is a session that acknowledges and
+   * does not serve: a fresh session on the same camera delivers a keyframe within a second, so a warm-up asks
+   * for one rather than forcing starts onto this one until its deadline.
    */
   private reissueStart(): void {
     const current = this.stream;
     if (!current?.nudge) return;
-    this.warmAttempts++;
     const arrivedSinceWatch = this.delivered.video || this.delivered.audio;
     if (arrivedSinceWatch) this.fruitlessReissues = 0;
     else this.fruitlessReissues++;
+    if (
+      this.fruitlessReissues > 2 &&
+      this._state === "warming" &&
+      this.askForFreshSession("forced start served nothing")
+    )
+      return;
+    this.warmAttempts++;
     current.nudge(!arrivedSinceWatch && this.fruitlessReissues > 1);
   }
 

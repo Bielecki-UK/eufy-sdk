@@ -120,7 +120,8 @@ describe("recovering a camera whose live start failed", () => {
       await vi.advanceTimersByTimeAsync(20000); // the source's own warm-up deadline
 
       expect(source.state).toBe("stopped");
-      expect(closed).toEqual([STANDALONE]);
+      // Replaced once inside the window (a forced start served nothing), recycled once at the deadline.
+      expect(closed).toEqual([STANDALONE, STANDALONE]);
       await vi.runAllTimersAsync();
       expect(await router.sharedLiveSourceFor(STANDALONE)).not.toBe(source);
     } finally {

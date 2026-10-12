@@ -144,6 +144,9 @@ export type DeviceNotificationMode = Extract<ArmingMode, "home" | "away" | "cust
  */
 const STANDALONE_ACTION_MODELS: ReadonlySet<string> = new Set(["T8170", "T8171"]);
 
+/** The standalone cameras whose own flags are read live: the two above plus the three that stay read only. */
+const STANDALONE_READ_MODELS: ReadonlySet<string> = new Set([...STANDALONE_ACTION_MODELS, "T8400", "T8442", "T8410"]);
+
 /**
  * A device's own flags for `mode`, as its params report them: Home on 1225, Away on 1239, custom1 on 1148,
  * plain flags without the `mode_id << 24` the write carries. Every device reports these, standalone or
@@ -449,7 +452,8 @@ export const ARMING_MEMBERS = {
   /**
    * Whether the device on `channel` sends a push notification in `mode`: its {@link DEVICE_NOTIFY_FLAG}
    * in the action table the station reports for that mode. `undefined` where the station reports no table
-   * or the table does not list `channel`. A device's channel is `EufyDevice.channel`.
+   * or the table does not list `channel`. A standalone camera answers from its own 1225/1239/1148 flags,
+   * for its own channel only. A device's channel is `EufyDevice.channel`.
    */
   deviceNotification: method(
     ({ ctx, read }) =>
@@ -463,15 +467,17 @@ export const ARMING_MEMBERS = {
         return typeof action === "number" ? (action & DEVICE_NOTIFY_FLAG) !== 0 : undefined;
       },
     "Whether the device on a channel sends a push notification in a guard mode (home/away/custom1).",
-    () => true,
+    (ctx) => ctx.model === "T8010" || STANDALONE_READ_MODELS.has(ctx.model ?? ""),
   ),
 
   /**
    * Turn the push notification of the device on `channel` on or off in `mode` (cmd
    * {@link ARMING_CMD.SET_ALL_ACTION}): the station's reported table written back with that one flag
-   * changed. Rejects, sending nothing, where the table does not list `channel`. A write builds on the last
-   * one sent for that mode until the station reports a table observed 15 s after it, so a second write does
-   * not revert it; a write whose dispatch rejects is not built on.
+   * changed. A standalone camera is sent a one-entry `{mode_id, devices}` table built from its own flags,
+   * for its own channel only. Rejects, sending nothing, where the table does not list `channel`. A write
+   * builds on the last one sent for that mode until the device reports a table (`${mode}Action` on a
+   * standalone camera) observed 15 s after it, so a second write does not revert it; a write whose dispatch
+   * rejects is not built on.
    */
   setDeviceNotification: method(
     ({ ctx, sink, read }) => {

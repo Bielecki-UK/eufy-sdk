@@ -375,12 +375,9 @@ describe("arming capability module", () => {
       expect([...unlisted.sent, ...noTable.sent]).toEqual([]);
     });
 
-    it("reads nothing and writes nothing on another station model", () => {
+    it("is absent on another station model", () => {
       const { acts } = bind<ArmingActions>("arming", { ...ctx, model: "T8030" }, { read });
-      expect(
-        acts.deviceNotification!(AlarmDelayMode.home, 0),
-        "a base answers only from its own params",
-      ).toBeUndefined();
+      expect(acts.deviceNotification).toBeUndefined();
       expect(acts.setDeviceNotification).toBeUndefined();
     });
 

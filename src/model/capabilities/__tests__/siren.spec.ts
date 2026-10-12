@@ -366,8 +366,8 @@ describe("siren capability module", () => {
       ]);
     });
 
-    it("refuses a camera alarm behind a HomeBase S1 Pro for a model with no evidence for the portal form", async () => {
-      const { acts, sent } = sirenOf({
+    it("installs no alarm action on a camera behind a HomeBase S1 Pro for a model with no evidence for the portal form", () => {
+      const { acts } = sirenOf({
         channel: 2,
         codec: "camera",
         deviceType: DeviceType.CAMERA2,
@@ -378,10 +378,10 @@ describe("siren capability module", () => {
         capabilities: new Set(["siren"]),
         paramIds: new Set([1015, 61008, 1825, 61006]),
       });
-      const alarm = acts as unknown as { trigger?: (s: number) => Promise<void> };
+      const alarm = acts as unknown as Record<string, unknown>;
 
-      await expect(alarm.trigger!(30)).rejects.toThrow(/unverified for T8114/);
-      expect(sent).toEqual([]);
+      expect(alarm.trigger).toBeUndefined();
+      expect(alarm.stop).toBeUndefined();
     });
 
     it.each([

@@ -139,19 +139,11 @@ function homeBaseAlarm(seconds: number, ctx: CommandContext): Command {
 const PORTAL_MANUAL_ALARM_TYPE = 10;
 
 /**
- * The camera models whose alarm behind a HomeBase S1 Pro answered the portal's `1350` form with `err=0` on
- * a real T9000. Another model there has no evidence for the form, so its alarm throws.
+ * The camera models the portal's `1350` alarm form is evidenced on behind a HomeBase S1 Pro: a portal
+ * capture plus a run on a real T9000 in which that camera alone sounded and stopped. Another model there
+ * has no evidence for the form, so its alarm throws.
  */
-const S1_PRO_ALARM_MODELS: ReadonlySet<string> = new Set([
-  "T8113",
-  "T8122",
-  "T8134",
-  "T814X",
-  "T8161",
-  "T8214",
-  "T8400",
-  "T8790",
-]);
+const S1_PRO_ALARM_MODELS: ReadonlySet<string> = new Set(["T8134"]);
 
 /**
  * Build the attached-camera duration command for its own bound device channel. Behind a HomeBase S1

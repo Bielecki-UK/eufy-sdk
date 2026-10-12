@@ -1089,7 +1089,8 @@ export class EufyMega extends EventEmitter {
 
   /**
    * The station a device's commands go through: the device itself, or the HomeBase the registry links it
-   * to. The RTC route is resolved from it, and the command context reads the station's type from it.
+   * to. Answers the target record, the station record and serial, the station's `device_type`, and the
+   * `t9000` / `t8n00` family flags.
    */
   private stationOf(sn: string) {
     const devices = this.registry.list();

@@ -260,7 +260,7 @@ export interface AvailabilityContext {
   /** Serial of the covering station, when the device record names one. */
   stationSerial?: string;
   /**
-   * The vendor DeviceType of the station the device hangs off (its `parent_sn`), when it is attached
+   * The vendor DeviceType of the station the device hangs off, when it is attached
    * and the station's record states one. Answers which station family a command addressed to an
    * attached device is carried through.
    */

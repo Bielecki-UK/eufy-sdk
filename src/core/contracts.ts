@@ -536,6 +536,8 @@ export type VideoCodec = "h264" | "h265" | "av1";
  * headers promise decodes to no picture at all.
  */
 export interface LiveVideoFrame {
+  /** Source-reported unsigned 32-bit timestamp; unit and clock origin are unspecified. */
+  sourceTimestamp?: number;
   /** True on an IDR — a unit a consumer may begin decoding at, never a continuation of an earlier one. */
   keyframe: boolean;
   /**

@@ -50,20 +50,32 @@ export const LOCK_SETTING_ID = {
 export type LockActions = Surface<typeof LOCK_MEMBERS>;
 
 /** Native video-lock command vocabulary verified on T8530 attached to HomeBase 3. */
-const VIDEO_LOCK_CMD = { STATUS: 1955, NOTIFY: 1351 } as const;
+const VIDEO_LOCK_CMD = { ACTUATE: 1961, STATUS: 1955, NOTIFY: 1351 } as const;
 
 /**
  * The actuation intent, or a refusal naming what is missing. Identity is a genuine precondition — the
  * frame carries the member fields — and a generated "not a valid value" message would misreport it.
  */
 function actuate(engage: boolean, ctx: CommandContext, sink: CommandSink): Promise<void> {
-  if (isVideoSmartLock(ctx)) {
-    return Promise.reject(new Error("lock: native T8530 actuation is unverified"));
-  }
-  if (!ctx.adminUserId || !ctx.shortUserId) {
+  if (!ctx.adminUserId || !ctx.shortUserId || (isVideoSmartLock(ctx) && !ctx.accountName)) {
     return Promise.reject(
-      new Error(`lock: missing member identity (admin_user_id/short_user_id) [${describeDevice(ctx)}]`),
+      new Error(
+        `lock: missing member identity (admin_user_id/short_user_id, and user name on video locks) [${describeDevice(ctx)}]`,
+      ),
     );
+  }
+  if (isVideoSmartLock(ctx)) {
+    return sink.dispatch({
+      kind: "set-payload-once",
+      cmd: VIDEO_LOCK_CMD.ACTUATE,
+      accountId: ctx.adminUserId,
+      payload: {
+        shortUserId: ctx.shortUserId,
+        slOperation: engage ? 1 : 0,
+        userId: ctx.adminUserId,
+        userName: ctx.accountName,
+      },
+    });
   }
   return sink.dispatch({
     kind: "ff09-actuate",
@@ -196,7 +208,6 @@ export const LOCK_MEMBERS = {
       (): Promise<void> =>
         actuate(true, ctx, sink),
     "Lock the deadbolt/door.",
-    (ctx) => !isVideoSmartLock(ctx),
   ),
   /** Unlock the deadbolt/door. Resolves after sending; does not confirm physical state. */
   unlock: method(
@@ -204,7 +215,6 @@ export const LOCK_MEMBERS = {
       (): Promise<void> =>
         actuate(false, ctx, sink),
     "Unlock the deadbolt/door.",
-    (ctx) => !isVideoSmartLock(ctx),
   ),
 
   /**

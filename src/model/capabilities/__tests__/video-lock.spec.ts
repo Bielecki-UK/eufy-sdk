@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { LOCK, LOCK_MEMBERS, type LockActions } from "../lock.js";
+import { LOCK, type LockActions } from "../lock.js";
 import { bind } from "./bind.js";
 import { Device } from "../../device.js";
 import type { CommandContext, InboundSignal } from "../types.js";
@@ -28,17 +28,26 @@ const signal = (payload: unknown, deviceType = 55): InboundSignal => ({
 });
 
 describe("native video lock", () => {
-  it.each(["lock", "unlock"] as const)(
-    "withholds unverified %s and rejects a direct invocation without sending",
-    async (action) => {
-      const { acts, sent } = bind<LockActions>("lock", ctx);
-      expect(acts[action]).toBeUndefined();
-      expect(action in acts).toBe(false);
-      const dispatch = vi.fn();
-      await expect(LOCK_MEMBERS[action].method({ ctx, sink: { dispatch }, read: () => undefined })()).rejects.toThrow(
-        /unverified/,
-      );
-      expect(dispatch).not.toHaveBeenCalled();
+  it.each([
+    ["lock", 1],
+    ["unlock", 0],
+  ] as const)("%s sends one native intent with numeric operation", async (action, operation) => {
+    const { acts, sent } = bind<LockActions>("lock", ctx);
+    await acts[action]();
+    expect(sent).toEqual([
+      {
+        kind: "set-payload-once",
+        cmd: 1961,
+        accountId: ctx.adminUserId,
+        payload: { shortUserId: "0001", slOperation: operation, userId: ctx.adminUserId, userName: ctx.accountName },
+      },
+    ]);
+  });
+  it.each(["adminUserId", "shortUserId", "accountName"] as const)(
+    "refuses missing %s before sending",
+    async (field) => {
+      const { acts, sent } = bind<LockActions>("lock", { ...ctx, [field]: undefined });
+      await expect(acts.lock()).rejects.toThrow(/missing member identity/);
       expect(sent).toEqual([]);
     },
   );

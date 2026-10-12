@@ -56,7 +56,7 @@ const fresh = await dev.camera?.()?.snapshotLive?.(); // → { jpeg, width, heig
 await dev.ptz?.()?.rotate(PtzDirection.left, 1.0); // PTZ step — see the PTZ guide
 await dev.light?.()?.setBrightness(50); // spotlight 1–100
 await dev.arming?.()?.setMode(ArmingMode.home); // guard mode
-await dev.lock?.()?.lock?.();
+await dev.lock?.()?.lock();
 await dev.lock?.()?.setAutoLock?.(true, 60); // enable, 60s delay
 await dev.lock?.()?.setRainMode?.(true); // P2P video lock only — optional accessor
 ```
@@ -248,9 +248,10 @@ Next: [Events](/events) · [Live media](/live-media).
 
 ## Video Smart Lock S330 (T8530)
 
-T8530 (cloud device type 55) uses native video-lock status rather than the compact settings protocol
-used by T8531 and T85D0. Native lock/unlock actuation is unverified in the SDK and is withheld on this
-family. Existing lock families retain their current control paths.
+T8530 (cloud device type 55) uses native video-lock control and status rather than the compact settings
+protocol used by T8531 and T85D0. Lock and unlock send one command each, without replay. Their
+completion means the SDK sent the request; it does not confirm acceptance or physical movement.
+Existing lock families retain their current control paths.
 
 Use `refreshStatus()` for an explicit live read. It answers `true` for locked, `false` for unlocked,
 and `undefined` for an unrecognised or missing state. Settled reports also update the last-known

@@ -115,6 +115,29 @@ describe("video lock status integration", () => {
       timezone: "UTC0",
     });
   });
+  it.each([
+    [{ timezone: "parent-zone", time_zone: "parent-alias" }, { timezone: "device-zone" }, "parent-zone"],
+    [{ time_zone: "parent-alias" }, { timezone: "device-zone" }, "parent-alias"],
+    [{}, { timezone: "device-zone", time_zone: "device-alias" }, "device-zone"],
+    [{ time_zone: "" }, { time_zone: "device-alias" }, "device-alias"],
+  ])(
+    "exposes public status reads using reported timezone fields (%j, %j)",
+    async (parentZone, deviceZone, expected) => {
+      const { client, internal } = harness();
+      for (const entry of internal.registry.devices) delete entry.raw.timezone;
+      Object.assign(internal.registry.devices[1].raw, parentZone);
+      Object.assign(internal.registry.devices[0].raw, deviceZone);
+      const query = vi.fn().mockResolvedValue({ code: 0, slState: "3", slBattery: "65" });
+      vi.spyOn(internal, "mediaProviderFor").mockReturnValue({ p2pQuery: query });
+      const dev = await client.getDevice(SN);
+      expect(dev.lock?.()?.refreshStatus).toBeTypeOf("function");
+      await expect(dev.lock?.()?.refreshStatus?.()).resolves.toBe(false);
+      expect(query).toHaveBeenCalledExactlyOnceWith(1955, {
+        payload: { timezone: expected },
+        accountId: "station-admin",
+      });
+    },
+  );
   it("keeps realtime status above a stale cloud refresh using the real registry", async () => {
     const mega = {
       post: async (_service: string, path: string) =>

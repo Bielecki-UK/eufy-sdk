@@ -82,6 +82,14 @@ describe("video lock status integration", () => {
     const fetched = await client.getDevice(SN);
     expect(fetched.lock?.()?.locked).toBe(true);
   });
+  it("keeps the last settled state when an unknown native report arrives", () => {
+    const { internal, dev } = harness();
+    internal.onP2PFrame(HUB, frame({ code: 0, slState: "4" }));
+    internal.onP2PFrame(HUB, frame({ code: 0, slState: "5", slBattery: "66" }));
+    expect(dev.lock?.()?.locked).toBe(true);
+    expect(dev.lock?.()?.battery).toBe(66);
+    expect(internal.registry.dpParams.get(SN)[6000]).toBe("4");
+  });
   it("does not land errors, malformed reports, or another channel's status", () => {
     const { internal, dev } = harness();
     internal.onP2PFrame(HUB, frame({ code: -106, slState: 4 }));

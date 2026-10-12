@@ -50,32 +50,20 @@ export const LOCK_SETTING_ID = {
 export type LockActions = Surface<typeof LOCK_MEMBERS>;
 
 /** Native video-lock command vocabulary verified on T8530 attached to HomeBase 3. */
-const VIDEO_LOCK_CMD = { ACTUATE: 1961, STATUS: 1955, NOTIFY: 1351 } as const;
+const VIDEO_LOCK_CMD = { STATUS: 1955, NOTIFY: 1351 } as const;
 
 /**
  * The actuation intent, or a refusal naming what is missing. Identity is a genuine precondition — the
  * frame carries the member fields — and a generated "not a valid value" message would misreport it.
  */
 function actuate(engage: boolean, ctx: CommandContext, sink: CommandSink): Promise<void> {
-  if (!ctx.adminUserId || !ctx.shortUserId || (isVideoSmartLock(ctx) && !ctx.accountName)) {
-    return Promise.reject(
-      new Error(
-        `lock: missing member identity (admin_user_id/short_user_id, and user name on video locks) [${describeDevice(ctx)}]`,
-      ),
-    );
-  }
   if (isVideoSmartLock(ctx)) {
-    return sink.dispatch({
-      kind: "set-payload-once",
-      cmd: VIDEO_LOCK_CMD.ACTUATE,
-      accountId: ctx.adminUserId,
-      payload: {
-        shortUserId: ctx.shortUserId,
-        slOperation: engage ? 1 : 0,
-        userId: ctx.adminUserId,
-        userName: ctx.accountName,
-      },
-    });
+    return Promise.reject(new Error("lock: native T8530 actuation is unverified"));
+  }
+  if (!ctx.adminUserId || !ctx.shortUserId) {
+    return Promise.reject(
+      new Error(`lock: missing member identity (admin_user_id/short_user_id) [${describeDevice(ctx)}]`),
+    );
   }
   return sink.dispatch({
     kind: "ff09-actuate",
@@ -109,12 +97,14 @@ function settingToggle(settingId: number, name: string, enabled: boolean, ctx: C
 const overP2p = (ctx: AvailabilityContext): boolean => ctx.hasP2p === true && !isVideoSmartLock(ctx);
 
 /** Live status read; unknown states remain unknown and device refusals reject. */
-async function refreshStatus(ctx: CommandContext, media?: MediaProvider): Promise<boolean | undefined> {
-  if (!ctx.adminUserId || !ctx.timezone || !media?.p2pQuery)
-    throw new Error("lock.refreshStatus: missing identity, reported timezone or query provider");
-  const payload = await media.p2pQuery(VIDEO_LOCK_CMD.STATUS, {
-    payload: { timezone: ctx.timezone },
-    accountId: ctx.adminUserId,
+async function refreshStatus(
+  query: NonNullable<MediaProvider["p2pQuery"]>,
+  timezone: string,
+  accountId: string,
+): Promise<boolean | undefined> {
+  const payload = await query(VIDEO_LOCK_CMD.STATUS, {
+    payload: { timezone },
+    accountId,
   });
   if (payload.code !== 0) throw new Error(`lock.refreshStatus: device result ${String(payload.code)}`);
   return nativeState(payload.slState);
@@ -170,7 +160,7 @@ export const LOCK_MEMBERS = {
     kind: "boolean",
     provenance: "verified",
     writtenElsewhere: true,
-    coerce: (raw) => nativeState(raw) ?? String(raw),
+    coerce: (raw) => String(raw).trim() === "4",
     description: "Lock state, true=locked (verified: param 6000, 4=locked, 3=unlocked).",
   },
   /**
@@ -206,6 +196,7 @@ export const LOCK_MEMBERS = {
       (): Promise<void> =>
         actuate(true, ctx, sink),
     "Lock the deadbolt/door.",
+    (ctx) => !isVideoSmartLock(ctx),
   ),
   /** Unlock the deadbolt/door. Resolves after sending; does not confirm physical state. */
   unlock: method(
@@ -213,6 +204,7 @@ export const LOCK_MEMBERS = {
       (): Promise<void> =>
         actuate(false, ctx, sink),
     "Unlock the deadbolt/door.",
+    (ctx) => !isVideoSmartLock(ctx),
   ),
 
   /**
@@ -352,12 +344,17 @@ export const LOCK_MEMBERS = {
 
   /** Read the current device-reported state; undefined means no settled locked/unlocked state. */
   refreshStatus: {
-    ...method(
-      ({ ctx, media }) =>
-        () =>
-          refreshStatus(ctx, media),
+    ...provided(
+      "media",
+      (media, { ctx }) => {
+        const query = media.p2pQuery?.bind(media);
+        const timezone = ctx.timezone;
+        const accountId = ctx.adminUserId;
+        return isVideoSmartLock(ctx) && timezone && accountId && query
+          ? () => refreshStatus(query, timezone, accountId)
+          : undefined;
+      },
       "Read the current lock state from the device.",
-      isVideoSmartLock,
     ),
     answers: true,
   },
@@ -423,7 +420,7 @@ export const LOCK: CapabilityModule = {
     const report = nativeReport(signal);
     if (!report) return null;
     const params: Record<number, string> = {};
-    if (typeof report.slState === "string" || typeof report.slState === "number") params[6000] = String(report.slState);
+    if (nativeState(report.slState) !== undefined) params[6000] = String(report.slState);
     if (
       report.slBattery !== undefined &&
       report.slBattery !== "" &&

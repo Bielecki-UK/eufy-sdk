@@ -1444,6 +1444,7 @@ export class EufyMega extends EventEmitter {
       readiness.push.failed += readiness.push.pending;
       readiness.push.pending = 0;
       this.settleRealtimeGeneration(generation, epoch === this.realtimeEpoch ? "partial" : "superseded");
+      if (epoch === this.realtimeEpoch) this.retryPush(generation);
     }
   }
 
@@ -1451,23 +1452,18 @@ export class EufyMega extends EventEmitter {
    * Bring push up again after the generation's startup attempt failed, backing off between attempts
    * until one connects, the generation is superseded, or it is aborted by {@link disconnect}.
    *
-   * Push is the only channel that carries the account's event notifications (a doorbell press among
-   * them), and its bring-up is several network round-trips — the FCM registration and the MCS login —
-   * any of which a transient outage fails. The MCS socket reconnects on
-   * its own once it has connected; this covers the attempt that never got that far. Every failed attempt
-   * is reported via `error`. The settled {@link RealtimeReadiness} is a startup snapshot and is not
-   * revised when a retry connects.
+   * The MCS socket reconnects on its own only once it has connected. The settled
+   * {@link RealtimeReadiness} is a startup snapshot and is not revised when a retry connects.
    */
   private retryPush(generation: RealtimeGeneration, delayMs = PUSH_RETRY_MIN_MS): void {
     this.pushRetryTimer.arm(delayMs, () => {
-      if (generation.epoch !== this.realtimeEpoch) return;
       this.startPush(generation.abort.signal).then(
         (client) => {
           if (generation.epoch !== this.realtimeEpoch) return client.close();
           this.pushClient = client;
         },
         (error) => {
-          if (error instanceof RealtimeStartupSupersededError || generation.epoch !== this.realtimeEpoch) return;
+          if (generation.epoch !== this.realtimeEpoch) return;
           this.reportError(error);
           this.retryPush(generation, Math.min(delayMs * 2, PUSH_RETRY_MAX_MS));
         },

@@ -21,7 +21,7 @@ import type { CameraActions } from "../camera.js";
 import { DeviceType } from "../../device-types.js";
 import { Device } from "../../device.js";
 import type { CommandContext } from "../types.js";
-import type { MediaProvider } from "../../../core/contracts.js";
+import { CameraDisabledError, type MediaProvider } from "../../../core/contracts.js";
 
 /**
  * Pinned to the `camera` capability so intent resolution is this module's alone — the barrel walks every
@@ -466,11 +466,23 @@ describe("camera capability module", () => {
      * Live: on an S350 (T8416), app privacy mode is a state 1035 never touches — a 1035 "on" left the camera
      * in privacy, recording nothing. Its power is privacy mode, so it rides the same wire `privacy` does.
      */
-    it("S350 powers through the privacy burst: ON ⇒ privacy off, OFF ⇒ privacy on", () => {
-      const c = ctx(5, { deviceType: DeviceType.INDOOR_PT_CAMERA_S350 });
+    it("attached S350 powers through the privacy burst: ON ⇒ privacy off, OFF ⇒ privacy on", () => {
+      const c = ctx(5, { deviceType: DeviceType.INDOOR_PT_CAMERA_S350, homeBaseAttached: true });
       expect(buildCommand("on", true, c)).toEqual({ kind: "p2p-privacy-burst", enabled: false, channel: 5 });
       expect(buildCommand("off", false, c)).toEqual({ kind: "p2p-privacy-burst", enabled: true, channel: 5 });
       expect(buildCommand("off", false, c)).toEqual(buildCommand("privacy", true, c));
+    });
+
+    /** Only the attached topology was run; a standalone S350 keeps the auto-sealed 1035 a keyless session can send. */
+    it("standalone S350 stays on the auto-sealed on/off param", () => {
+      for (const homeBaseAttached of [false, undefined]) {
+        const c = ctx(0, { deviceType: DeviceType.INDOOR_PT_CAMERA_S350, homeBaseAttached });
+        expect(buildCommand("off", false, c)).toMatchObject({
+          kind: "set-param",
+          param: CAMERA_CMD.CAMERA_ENABLE,
+          form: "auto",
+        });
+      }
     });
   });
 
@@ -824,9 +836,9 @@ export const _surfaceAssertions = [
  * `1035`, and none reported both.
  */
 describe("camera enablement — observed write", () => {
-  const observationFor = (deviceType: number, reported: number[], value: boolean) => {
+  const observationFor = (deviceType: number, reported: number[], value: boolean, homeBaseAttached?: boolean) => {
     const member = CAMERA_MEMBERS.enabled;
-    const ctx = { channel: 0, codec: "camera" as const, deviceType, paramIds: new Set(reported) };
+    const ctx = { channel: 0, codec: "camera" as const, deviceType, homeBaseAttached, paramIds: new Set(reported) };
     return member.observation.reflects(value, ctx as never);
   };
 
@@ -878,12 +890,46 @@ describe("camera enablement — observed write", () => {
    * cloud record carried 1035 and no 6250, so the write dispatches unobserved and the read is named
    * unreflected rather than waited on.
    */
-  it("never observes the S350 and names its enablement unreflected", () => {
-    expect(observationFor(DeviceType.INDOOR_PT_CAMERA_S350, [CAMERA_ENABLE], true)).toBeUndefined();
+  it("never observes the attached S350 and names its enablement unreflected", () => {
+    expect(observationFor(DeviceType.INDOOR_PT_CAMERA_S350, [CAMERA_ENABLE], true, true)).toBeUndefined();
     const reflects = CAMERA_MEMBERS.enabled.readReflectsWrite;
-    const cam = (deviceType: number) =>
-      ({ channel: 0, codec: "camera", deviceType, paramIds: new Set([CAMERA_ENABLE]) }) as never;
-    expect(reflects(cam(DeviceType.INDOOR_PT_CAMERA_S350))).toBe(false);
+    const cam = (deviceType: number, homeBaseAttached?: boolean) =>
+      ({ channel: 0, codec: "camera", deviceType, homeBaseAttached, paramIds: new Set([CAMERA_ENABLE]) }) as never;
+    expect(reflects(cam(DeviceType.INDOOR_PT_CAMERA_S350, true))).toBe(false);
+    expect(reflects(cam(DeviceType.INDOOR_PT_CAMERA_S350, false))).toBe(true);
     expect(reflects(cam(9))).toBe(true);
+  });
+
+  /**
+   * An earlier 1035 off can leave the attached S350 reporting off after a burst on() — the burst never moves
+   * 1035 — so that reading does not refuse a media pull.
+   */
+  it("pulls media from an attached S350 that reports 1035 as off", async () => {
+    const media: MediaProvider = {
+      snapshotLive: async () => ({ jpeg: Buffer.from("jpeg"), width: 1, height: 1 }),
+      live: async () => ({}) as never,
+      record: async () => Buffer.alloc(0),
+    };
+    const read = () => ({ value: false });
+    const s350 = (homeBaseAttached: boolean) =>
+      bind<CameraActions>(
+        "camera",
+        ctx(5, {
+          deviceType: DeviceType.INDOOR_PT_CAMERA_S350,
+          homeBaseAttached,
+          paramIds: new Set([CAMERA_ENABLE]),
+        }),
+        { media, read },
+      ).acts;
+    expect((await s350(true).snapshotLive!()).jpeg).toEqual(Buffer.from("jpeg"));
+    await expect(s350(false).snapshotLive!()).rejects.toBeInstanceOf(CameraDisabledError);
+  });
+
+  /** A standalone S350 is written on the 1035 it reports, so it is observed there like any other 1035 family. */
+  it("observes a standalone S350 on the param it reports", () => {
+    expect(observationFor(DeviceType.INDOOR_PT_CAMERA_S350, [CAMERA_ENABLE], true, false)).toMatchObject({
+      param: CAMERA_ENABLE,
+      observed: true,
+    });
   });
 });

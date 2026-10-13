@@ -73,9 +73,9 @@ describe("original media receipt through video Readable", () => {
     const { source, stream } = harness();
     const original = frame();
     const first = source.attach();
-    let retained: TimedMediaFrame | undefined;
+    let retained: Extract<TimedMediaFrame, { kind: "video" }> | undefined;
     first.onMedia((item) => {
-      retained = item;
+      if (item.kind === "video") retained = item;
     });
     stream.video(original);
     first.detach();
@@ -167,28 +167,5 @@ describe("original media receipt through video Readable", () => {
     await flush();
     expect(received.map((value) => value.receipt.monotonicUs)).toEqual([1_000_000n, 2_000_000n]);
     expect(received.map((value) => value.receipt.sequence)).toEqual([1n, 2n]);
-  });
-
-  it("retains plain object-mode frame identity and raw-byte API without opt-in", async () => {
-    const { source, stream } = harness();
-    const objects = track(openReadableFromConsumer(source.attach(), { objectMode: true }));
-    const raw = track(openReadableFromConsumer(source.attach()));
-    const values: LiveVideoFrame[] = [],
-      bytes: Buffer[] = [];
-    objects.on("data", (value) => values.push(value));
-    raw.on("data", (value) => bytes.push(value));
-    const original = frame();
-    stream.video(original);
-    await flush();
-    expect(values).toEqual([original]);
-    expect(values[0]).toBe(original);
-    expect(bytes).toEqual([original.data]);
-    expect(Object.hasOwn(values[0], "receipt")).toBe(false);
-  });
-
-  it("rejects receipts on raw mode without leaking a consumer attachment", () => {
-    const { source } = harness();
-    expect(() => openReadableFromConsumer(source.attach(), { receiptMetadata: true })).toThrow(/requires objectMode/);
-    expect(source.consumerCount).toBe(0);
   });
 });

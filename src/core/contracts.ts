@@ -594,11 +594,11 @@ export interface LiveVideoConfig {
   height: number;
 }
 
-/** Immutable identity and monotonic receipt of one media arrival in this SDK process. */
+/** Immutable identity and monotonic receipt of one video arrival in this SDK process. */
 export interface MediaReceipt {
   /** Opaque identity of the shared source instance, independent of device identifiers. */
   readonly sourceId: string;
-  /** Arrival sequence within this source; retained delivery keeps the same value. */
+  /** Video arrival sequence within this source; retained delivery keeps the same value. */
   readonly sequence: bigint;
   /** process.hrtime clock in microseconds when the source first received the frame; not sensor capture time. */
   readonly monotonicUs: bigint;

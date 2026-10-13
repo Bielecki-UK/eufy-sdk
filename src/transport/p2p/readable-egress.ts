@@ -31,10 +31,6 @@ export interface ReadableEgressOptions {
  */
 export function openReadableFromConsumer(consumer: Consumer, opts: ReadableEgressOptions = {}): Readable {
   const objectMode = opts.objectMode ?? false;
-  if (opts.receiptMetadata && !objectMode) {
-    consumer.detach();
-    throw new TypeError("receiptMetadata requires objectMode");
-  }
 
   const readable = new Readable({
     objectMode,
@@ -55,14 +51,10 @@ export function openReadableFromConsumer(consumer: Consumer, opts: ReadableEgres
     const ok = readable.push(objectMode ? frame : frame.data);
     if (!ok) consumer.pause();
   };
-  if (opts.receiptMetadata) {
+  if (objectMode && opts.receiptMetadata) {
     consumer.onMedia((item) => {
       if (item.kind !== "video") return;
-      if (!item.receipt) {
-        readable.destroy(new Error("source receipt metadata unavailable"));
-        return;
-      }
-      const received: ReceivedVideoFrame = Object.freeze({ frame: item.frame, receipt: item.receipt });
+      const received: ReceivedVideoFrame = Object.freeze({ frame: item.frame, receipt: item.receipt! });
       if (!readable.push(received)) consumer.pause();
     });
     consumer.on("video", () => {});

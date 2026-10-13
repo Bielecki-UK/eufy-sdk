@@ -3,10 +3,41 @@ import { ref, watch, onMounted } from "vue";
 
 const q = ref("");
 const noResults = ref(false);
+const view = ref("photo");
 
-// Tiles are static HTML (not a v-for), so filter the rendered DOM directly: match each figure's
-// caption + model code + img alt, hide non-matches, then collapse any section (its <h3> + grid) that
-// ends up empty.
+// Model code (uppercase) → built URL of its line-art icon. Globbed rather than listed, so dropping an
+// SVG into device-icons/ is all it takes, and Vite resolves the URL against the site base.
+const ICONS = Object.fromEntries(
+  Object.entries(
+    import.meta.glob("./device-icons/*.svg", { query: "?url", import: "default", eager: true }),
+  ).map(([path, url]) => [path.slice(path.lastIndexOf("/") + 1, -4).toUpperCase(), url]),
+);
+
+// Show each tile's photo or its icon. A tile's icon is the first of its model codes that has one; a
+// tile with none keeps its photo in both views. The icon is drawn as a mask over the text colour, so
+// the black line art follows the light and dark theme.
+function applyView() {
+  if (typeof document === "undefined") return;
+  document.querySelectorAll(".device-gallery figure").forEach((fig) => {
+    const img = fig.querySelector("img");
+    if (!img) return;
+    const codes = (fig.querySelector(".model")?.textContent ?? "").split("·").map((c) => c.trim().toUpperCase());
+    const icon = codes.map((c) => ICONS[c]).find(Boolean);
+    let tile = fig.querySelector(".device-icon");
+    if (icon && !tile) {
+      tile = document.createElement("span");
+      tile.className = "device-icon";
+      tile.setAttribute("role", "img");
+      tile.setAttribute("aria-label", img.alt);
+      tile.style.setProperty("--icon", `url("${icon}")`);
+      img.after(tile);
+    }
+    const useIcon = view.value === "icon" && !!tile;
+    img.hidden = useIcon;
+    if (tile) tile.hidden = !useIcon;
+  });
+}
+
 function apply() {
   if (typeof document === "undefined") return;
   const term = q.value.trim().toLowerCase();
@@ -28,8 +59,12 @@ function apply() {
   noResults.value = !!term && !anyAtAll;
 }
 
-onMounted(apply);
+onMounted(() => {
+  apply();
+  applyView();
+});
 watch(q, apply);
+watch(view, applyView);
 </script>
 
 # Devices
@@ -67,6 +102,10 @@ from its reported capabilities. See [Devices & capabilities](/devices) for how r
     placeholder="Filter devices — name or model (e.g. C24, T8410, doorbell)"
     aria-label="Filter devices by name or model code"
   />
+  <div class="device-view" role="group" aria-label="Show devices as">
+    <button type="button" :aria-pressed="view === 'photo'" @click="view = 'photo'">Photo</button>
+    <button type="button" :aria-pressed="view === 'icon'" @click="view = 'icon'">Icon</button>
+  </div>
 </div>
 
 <p v-show="noResults" class="device-search-empty">No device matches — try a model code (<code>T8410</code>) or a name (<code>doorbell</code>).</p>
@@ -750,10 +789,13 @@ one model.
 
 <style>
 .device-search {
+  display: flex;
+  gap: 10px;
   margin: 18px 0 4px;
 }
 .device-search input {
-  width: 100%;
+  flex: 1;
+  min-width: 0;
   padding: 10px 14px;
   font-size: 15px;
   color: var(--vp-c-text-1);
@@ -765,6 +807,24 @@ one model.
 }
 .device-search input:focus {
   border-color: var(--vp-c-brand-1);
+}
+.device-view {
+  display: flex;
+  flex-shrink: 0;
+  border: 1px solid var(--vp-c-divider);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.device-view button {
+  padding: 0 14px;
+  font-size: 14px;
+  color: var(--vp-c-text-2);
+  background: var(--vp-c-bg-soft);
+  transition: color 0.2s, background 0.2s;
+}
+.device-view button[aria-pressed="true"] {
+  color: var(--vp-c-white);
+  background: var(--vp-c-brand-1);
 }
 .device-search-empty {
   color: var(--vp-c-text-2);
@@ -781,6 +841,17 @@ one model.
   width: 100%; height: 130px; object-fit: contain;
   background: var(--vp-c-bg-soft); border: 1px solid var(--vp-c-divider);
   border-radius: 10px; padding: 10px;
+}
+.device-icon {
+  display: block; height: 130px;
+  background: var(--vp-c-bg-soft); border: 1px solid var(--vp-c-divider);
+  border-radius: 10px;
+}
+.device-gallery [hidden] { display: none; }
+.device-icon::before {
+  content: ""; display: block; height: calc(100% - 44px); margin: 22px;
+  background: var(--vp-c-text-1);
+  mask: var(--icon) center / contain no-repeat;
 }
 .device-gallery figcaption {
   margin-top: 8px; font-size: 13px; line-height: 1.3; color: var(--vp-c-text-1);

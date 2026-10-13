@@ -174,6 +174,7 @@ const LIGHT_SWITCH_INT_STRING_TYPES: ReadonlySet<number> = new Set<number>([
   DeviceType.CAMERA2C_PRO,
   DeviceType.CAMERA3,
   DeviceType.CAMERA3C,
+  DeviceType.PROFESSIONAL_247,
 ]);
 
 /**

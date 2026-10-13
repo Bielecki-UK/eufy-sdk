@@ -164,6 +164,8 @@ export class LiveStream extends EventEmitter {
   private readonly unackedHandler = (channel: number) => {
     if (channel === this.channel) this.emit("unacknowledged");
   };
+  /** Stop delivery and keepalive timers when the connection underneath this stream ends. */
+  private readonly sessionClosedHandler = () => this.stop();
   private readonly logger: Logger;
 
   constructor(
@@ -190,6 +192,7 @@ export class LiveStream extends EventEmitter {
     this.session.on("data", this.handler);
     this.session.on("videoGap", this.videoGapHandler);
     this.session.on("liveStartUnacknowledged", this.unackedHandler);
+    this.session.on("close", this.sessionClosedHandler);
     this.sendStart();
     const keepAliveMs = this.opts.keepAliveMs ?? DEFAULT_KEEPALIVE_MS;
     if (keepAliveMs > 0) {
@@ -290,6 +293,7 @@ export class LiveStream extends EventEmitter {
     this.session.off("videoGap", this.videoGapHandler);
     this.awaitingKeyframeAfterGap = false;
     this.session.off("liveStartUnacknowledged", this.unackedHandler);
+    this.session.off("close", this.sessionClosedHandler);
     if (this.kaTimer) clearInterval(this.kaTimer);
     this.kaTimer = undefined;
     if (this.stallTimer) clearTimeout(this.stallTimer);

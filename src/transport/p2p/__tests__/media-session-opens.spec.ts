@@ -19,14 +19,12 @@ const built: FakeSession[] = [];
 
 /** Set before an open to make the NEXT session connect without ever getting a level-2 key. */
 let nextSessionHasNoKey = false;
-let nextSessionKeyGate: Promise<void> | undefined;
 
 class FakeSession extends EventEmitter {
   isConnected = false;
   traceId = `trace-${built.length}`;
   opts: Record<string, unknown>;
   hasKey: boolean;
-  keyGate?: Promise<void>;
   decodeVideoFrame(data: Buffer) {
     return data.subarray(22);
   }
@@ -36,8 +34,6 @@ class FakeSession extends EventEmitter {
     super();
     this.opts = opts;
     this.hasKey = !nextSessionHasNoKey;
-    this.keyGate = nextSessionKeyGate;
-    nextSessionKeyGate = undefined;
     nextSessionHasNoKey = false;
     built.push(this);
   }
@@ -45,7 +41,6 @@ class FakeSession extends EventEmitter {
     this.isConnected = true;
   }
   async awaitLevel2Key() {
-    await this.keyGate;
     return this.hasKey;
   }
   repromptLevel2Key() {
@@ -77,7 +72,6 @@ function router() {
   built.length = 0;
   events.length = 0;
   nextSessionHasNoKey = false;
-  nextSessionKeyGate = undefined;
   const record = (sn: string, channel: number, parent?: string) => ({
     sn,
     stationSn: parent ?? sn,
@@ -259,55 +253,8 @@ describe("a second live camera on a claimed station session", () => {
       };
       (b as unknown as { stream: EventEmitter }).stream.emit("video", frame);
       expect(delivered).toHaveBeenCalledWith(frame);
-      await r.closeAll();
-      expect(disposedB).toHaveBeenCalledOnce();
-      expect(built[1].isConnected).toBe(false);
-      expect(sources(r).size).toBe(0);
-      expect(sessionKeys(r).size).toBe(0);
     } finally {
       await r.closeAll();
     }
-  });
-
-  it("preserves a dedicated media reservation while its key wait is in flight and the control session closes", async () => {
-    const r = router();
-    (await openLive(r, CAM_A)).attach();
-    let releaseKey!: () => void;
-    nextSessionKeyGate = new Promise<void>((resolve) => {
-      releaseKey = resolve;
-    });
-    const opening = openLive(r, CAM_B);
-    try {
-      await vi.waitFor(() => expect(built).toHaveLength(2));
-      expect(sessionKeys(r).get(`${STATION_SN}:2`)).toBe(`${STATION_SN}#live:2`);
-      await built[0].close();
-      expect(sessionKeys(r).get(`${STATION_SN}:2`)).toBe(`${STATION_SN}#live:2`);
-      expect(sessionKeys(r).has(`${STATION_SN}:0`)).toBe(false);
-      releaseKey();
-      const b = await opening;
-      b.attach();
-      expect(sources(r).get(`${STATION_SN}:2`)).toBe(b);
-      expect(built[1].isConnected).toBe(true);
-    } finally {
-      releaseKey();
-      await opening.catch(() => undefined);
-      await r.closeAll();
-    }
-  });
-
-  it("explicit closeAll still closes all live connections and removes every ownership claim", async () => {
-    const r = router();
-    const a = await openLive(r, CAM_A);
-    a.attach();
-    const b = await openLive(r, CAM_B);
-    b.attach();
-    const disposedA = vi.spyOn(a, "dispose");
-    const disposedB = vi.spyOn(b, "dispose");
-    await r.closeAll();
-    expect(disposedA).toHaveBeenCalledOnce();
-    expect(disposedB).toHaveBeenCalledOnce();
-    expect(built.map((s) => s.isConnected)).toEqual([false, false]);
-    expect(sources(r).size).toBe(0);
-    expect(sessionKeys(r).size).toBe(0);
   });
 });

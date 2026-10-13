@@ -43,6 +43,7 @@ function routerFor() {
   const manager = (router as unknown as { manager: SessionManager }).manager;
   const sources = (router as unknown as { liveSources: Map<string, { dispose: () => void }> }).liveSources;
   const talkbacks = (router as unknown as { talkbacks: Map<string, { stop: () => Promise<void> }> }).talkbacks;
+  (router as unknown as { liveSessionKeys: Map<string, string> }).liveSessionKeys.set(`${STATION}:0`, STATION);
   return { manager, sources, talkbacks, closedStations };
 }
 

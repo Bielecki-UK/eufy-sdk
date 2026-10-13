@@ -1193,7 +1193,7 @@ export class P2PCommandRouter {
   }
 
   /**
-   * Drop everything that was riding a station's session, and report the station closed.
+   * Drop everything that was riding a station's session, preserving independent media sessions, and report it closed.
    *
    * A live source holds the `P2PSession` it was BUILT with and never re-resolves it, so one left cached
    * past its session is handed back to the next viewer over a dead connection: it answers the retained
@@ -1208,8 +1208,10 @@ export class P2PCommandRouter {
    */
   private tearDownStation(stationSn: string): void {
     this.manager.remove(stationSn);
-    for (const key of [...this.liveSources.keys()]) {
-      if (key.startsWith(`${stationSn}:`)) this.dropLiveSource(key);
+    for (const [key, owner] of [...this.liveSessionKeys]) {
+      if (owner !== stationSn) continue;
+      this.dropLiveSource(key);
+      this.liveSessionKeys.delete(key);
     }
     for (const [key, talk] of this.talkbacks) {
       if (key.startsWith(`${stationSn}:`)) {

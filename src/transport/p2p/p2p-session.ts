@@ -2108,42 +2108,22 @@ export class P2PSession extends EventEmitter {
    * of a header left at the end of a datagram is carried into the next one rather than discarded; dropping
    * it would lose that frame and every frame after it until a datagram happened to begin on a header.
    * Payload fragments retain their original slices and are copied once, when the complete frame is delivered.
-   * A split header is assembled separately within its fixed 16-byte size.
    */
   private reassemble(dataType: number, datagramBody: Buffer): void {
     const pending = this.pendingByDataType.get(dataType);
     this.pendingByDataType.delete(dataType);
-    let body = datagramBody;
+    let body = pending && !pending.header ? Buffer.concat([...pending.chunks, datagramBody]) : datagramBody;
 
-    if (pending) {
-      let header = pending.header;
-      let chunks = pending.chunks;
-      let byteLength = pending.byteLength;
-      if (!header) {
-        const needed = P2P_DATA_HEADER_BYTES - byteLength;
-        const taken = Math.min(needed, body.length);
-        if (taken) chunks.push(body.subarray(0, taken));
-        byteLength += taken;
-        body = body.subarray(taken);
-        if (byteLength < P2P_DATA_HEADER_BYTES) {
-          this.pendingByDataType.set(dataType, { chunks, byteLength });
-          return;
-        }
-        const headerBytes = Buffer.concat(chunks, byteLength);
-        if (headerBytes.subarray(0, 4).toString() !== MAGIC_WORD) return;
-        header = parseDataFrameHeader(headerBytes);
-        chunks = [];
-        byteLength = 0;
-      }
-      const taken = Math.min(header.bytesToRead - byteLength, body.length);
-      if (taken) chunks.push(body.subarray(0, taken));
-      byteLength += taken;
+    if (pending?.header) {
+      const taken = Math.min(pending.header.bytesToRead - pending.byteLength, body.length);
+      if (taken) pending.chunks.push(body.subarray(0, taken));
+      pending.byteLength += taken;
       body = body.subarray(taken);
-      if (byteLength < header.bytesToRead) {
-        this.pendingByDataType.set(dataType, { header, chunks, byteLength });
+      if (pending.byteLength < pending.header.bytesToRead) {
+        this.pendingByDataType.set(dataType, pending);
         return;
       }
-      this.handleFrame(header, Buffer.concat(chunks, byteLength), dataType);
+      this.handleFrame(pending.header, Buffer.concat(pending.chunks, pending.byteLength), dataType);
     }
 
     while (body.length >= P2P_DATA_HEADER_BYTES && body.subarray(0, 4).toString() === MAGIC_WORD) {

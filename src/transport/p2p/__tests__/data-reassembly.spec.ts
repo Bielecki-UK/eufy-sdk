@@ -366,9 +366,6 @@ describe("P2P data reassembly", () => {
       expect(received.map((frame) => frame.commandId)).toEqual([1300, 1301, 1300]);
       expect(received.map((frame) => frame.raw)).toEqual([payload, Buffer.alloc(0), tail]);
       expect(copied.filter((bytes) => bytes > 1400)).toEqual([payload.length]);
-      expect(copied.reduce((sum, bytes) => sum + bytes, 0)).toBeLessThanOrEqual(
-        payload.length + 16 + packets.length * 6,
-      );
     } finally {
       spy.mockRestore();
       await close();

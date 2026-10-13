@@ -24,6 +24,7 @@
  *
  * @module p2p/shared-live-source
  */
+import { randomUUID } from "node:crypto";
 import { EventEmitter } from "node:events";
 import { LiveStreamStartError, type LiveStreamStartFailureReason } from "../../core/contracts.js";
 import { noopLogger, type Logger } from "../../core/logger.js";
@@ -32,6 +33,7 @@ import { codedGeometry, updatedParamSets, type CodedGeometry, type ParamSets } f
 import { traceLiveStart, type LiveTrace } from "./live-trace.js";
 import type {
   LiveAudioFrame,
+  MediaReceipt,
   LiveStreamConsumer,
   LiveStreamHandle,
   LiveVideoConfig,
@@ -178,8 +180,19 @@ export interface Consumer extends LiveStreamConsumer {
  * whichever one is current by the time they are delivered.
  */
 export type TimedMediaFrame =
-  | { kind: "video"; frame: LiveVideoFrame; timestampMs: number; config: LiveVideoConfig }
-  | { kind: "audio"; frame: LiveAudioFrame; timestampMs: number };
+  | {
+      kind: "video";
+      frame: LiveVideoFrame;
+      timestampMs: number;
+      config: LiveVideoConfig;
+      readonly receipt?: MediaReceipt;
+    }
+  | { kind: "audio"; frame: LiveAudioFrame; timestampMs: number; readonly receipt?: MediaReceipt };
+
+/** Retain an immutable receipt without changing default timed-item enumeration. */
+function withReceipt<T extends TimedMediaFrame>(item: T, receipt?: MediaReceipt): T {
+  return Object.defineProperty(item, "receipt", { value: receipt });
+}
 
 /** Internal per-consumer state + delivery. Exposed to callers only through the {@link Consumer} view. */
 class ConsumerImpl extends EventEmitter implements Consumer {
@@ -287,9 +300,9 @@ class ConsumerImpl extends EventEmitter implements Consumer {
   }
 
   /** Source → consumer audio. Dropped entirely while resyncing (audio has no keyframes). */
-  deliverAudio(frame: LiveAudioFrame, timestampMs: number): void {
+  deliverAudio(frame: LiveAudioFrame, timestampMs: number, receipt?: MediaReceipt): void {
     if (this.detached || this.awaitingKeyframe) return;
-    this.accept({ kind: "audio", frame, timestampMs });
+    this.accept(withReceipt({ kind: "audio", frame, timestampMs }, receipt));
   }
 
   private accept(item: TimedMediaFrame): void {
@@ -430,6 +443,11 @@ export class SharedLiveSource {
   /** Battery budget timer + post-notice grace timer (battery/solar sources only). */
   private readonly budgetTimer = new Timer();
   private readonly budgetGraceTimer = new Timer();
+
+  /** Stable opaque identity of this source's immutable arrival receipts. */
+  private readonly receiptSourceId = randomUUID();
+  /** Sequence of original media arrivals; replay never increments it. */
+  private receiptSequence = 0n;
 
   private readonly lingerMs: number;
   private readonly maxQueue: number;
@@ -757,12 +775,25 @@ export class SharedLiveSource {
     });
   }
 
+  /** Capture the process-monotonic receipt exactly once per original source arrival. */
+  private nextReceipt(): MediaReceipt {
+    return Object.freeze({
+      sourceId: this.receiptSourceId,
+      sequence: ++this.receiptSequence,
+      monotonicUs: process.hrtime.bigint() / 1000n,
+    });
+  }
+
   private onVideo(frame: LiveVideoFrame): void {
+    const receipt = this.nextReceipt();
     this.delivered.video = true;
     this.fruitlessReissues = 0;
     this.settleReuseWatch();
     this.lastParamSets = updatedParamSets(frame.data, this.lastParamSets);
-    const item = { kind: "video", frame, timestampMs: Date.now(), config: this.configOf(frame) } as const;
+    const item = withReceipt(
+      { kind: "video", frame, timestampMs: Date.now(), config: this.configOf(frame) } as const,
+      receipt,
+    );
     if (frame.keyframe) {
       this.lastKeyframe = item;
       const wasWarming = this.warmRetryTimer !== undefined || this.warmDeadlineTimer.pending;
@@ -814,12 +845,13 @@ export class SharedLiveSource {
   }
 
   private onAudio(frame: LiveAudioFrame): void {
-    const item = { kind: "audio", frame, timestampMs: Date.now() } as const;
+    const receipt = this.nextReceipt();
+    const item = withReceipt({ kind: "audio", frame, timestampMs: Date.now() } as const, receipt);
     this.delivered.audio = true;
     this.fruitlessReissues = 0;
     this.settleReuseWatch();
     this.pushRing(item);
-    for (const c of this.consumers) c.deliverAudio(frame, item.timestampMs);
+    for (const c of this.consumers) c.deliverAudio(frame, item.timestampMs, receipt);
   }
 
   /**

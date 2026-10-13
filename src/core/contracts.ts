@@ -594,6 +594,22 @@ export interface LiveVideoConfig {
   height: number;
 }
 
+/** Immutable identity and monotonic receipt of one media arrival in this SDK process. */
+export interface MediaReceipt {
+  /** Opaque identity of the shared source instance, independent of device identifiers. */
+  readonly sourceId: string;
+  /** Arrival sequence within this source; retained delivery keeps the same value. */
+  readonly sequence: bigint;
+  /** process.hrtime clock in microseconds when the source first received the frame; not sensor capture time. */
+  readonly monotonicUs: bigint;
+}
+
+/** Video frame paired with its original source receipt; retained deliveries reuse the frozen receipt. */
+export interface ReceivedVideoFrame {
+  readonly frame: LiveVideoFrame;
+  readonly receipt: MediaReceipt;
+}
+
 /**
  * Elementary-stream audio codec of a {@link LiveAudioFrame}. The station declares it per frame as a
  * byte in the `CMD_AUDIO_FRAME` header — unlike video, nothing is sniffed. These are the three values
@@ -885,12 +901,14 @@ export interface MediaProvider {
   record(seconds: number, opts?: { timeoutMs?: number; skipKeyframes?: number }): Promise<Buffer>;
   /**
    * Open a video-only `node:stream` Readable over a shared source consumer — raw Annex-B bytes
-   * (default) or `objectMode` {@link LiveVideoFrame}s. Audio is available separately through
+   * (default) or `objectMode` {@link LiveVideoFrame}s. With objectMode and receiptMetadata,
+   * it yields {@link ReceivedVideoFrame} envelopes whose original receipt survives retained replay.
+   * Audio is available separately through
    * {@link live} or muxed through {@link recordFragments}; it is never interleaved into raw video.
    * The caller owns the Readable's lifetime, and destroying it releases the shared pull.
    */
   openReadable?(
-    opts?: { objectMode?: boolean } & SharedSourceHints & AbortableCall,
+    opts?: { objectMode?: boolean; receiptMetadata?: boolean } & SharedSourceHints & AbortableCall,
   ): Promise<import("node:stream").Readable>;
   /**
    * Continuously record the live feed as fragmented-MP4 (CMAF). The caller-owned

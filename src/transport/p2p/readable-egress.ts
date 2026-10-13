@@ -14,11 +14,13 @@
  */
 import { Readable } from "node:stream";
 import type { Consumer } from "./shared-live-source.js";
-import type { LiveVideoFrame } from "../../core/contracts.js";
+import type { LiveVideoFrame, ReceivedVideoFrame } from "../../core/contracts.js";
 
 export interface ReadableEgressOptions {
   /** Emit {@link LiveVideoFrame} objects instead of raw Annex-B bytes (default false = bytes). */
   objectMode?: boolean;
+  /** Yield frozen ReceivedVideoFrame envelopes with original receipts; requires objectMode. */
+  receiptMetadata?: boolean;
   /** Readable highWaterMark (bytes, or object count in objectMode). */
   highWaterMark?: number;
 }
@@ -29,6 +31,10 @@ export interface ReadableEgressOptions {
  */
 export function openReadableFromConsumer(consumer: Consumer, opts: ReadableEgressOptions = {}): Readable {
   const objectMode = opts.objectMode ?? false;
+  if (opts.receiptMetadata && !objectMode) {
+    consumer.detach();
+    throw new TypeError("receiptMetadata requires objectMode");
+  }
 
   const readable = new Readable({
     objectMode,
@@ -49,7 +55,18 @@ export function openReadableFromConsumer(consumer: Consumer, opts: ReadableEgres
     const ok = readable.push(objectMode ? frame : frame.data);
     if (!ok) consumer.pause();
   };
-  consumer.on("video", onVideo);
+  if (opts.receiptMetadata) {
+    consumer.onMedia((item) => {
+      if (item.kind !== "video") return;
+      if (!item.receipt) {
+        readable.destroy(new Error("source receipt metadata unavailable"));
+        return;
+      }
+      const received: ReceivedVideoFrame = Object.freeze({ frame: item.frame, receipt: item.receipt });
+      if (!readable.push(received)) consumer.pause();
+    });
+    consumer.on("video", () => {});
+  } else consumer.on("video", onVideo);
 
   consumer.on("stop", () => readable.push(null)); // upstream ended → EOF
   consumer.on("error", (err: Error) => readable.destroy(err));

@@ -1,7 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { EufyMega } from "../eufy-mega.js";
 import { Device } from "../../model/device.js";
-import { DeviceRegistry } from "../device-registry.js";
 
 const SN = "T8530P0000000000";
 const HUB = "T8030P0000000000";
@@ -19,7 +18,6 @@ const roster = [
       parent_sn: HUB,
       device_channel: 7,
       member: { admin_user_id: "device-admin", short_user_id: "0002" },
-      timezone: "UTC0",
     },
   },
   {
@@ -27,7 +25,7 @@ const roster = [
     model: "T8030",
     raw: {
       device_type: 18,
-      timezone: "reported-vendor-zone",
+      time_zone: "reported-vendor-zone",
       member: { admin_user_id: "station-admin", short_user_id: "0001", nick_name: "synthetic-member" },
     },
   },
@@ -98,70 +96,26 @@ describe("video lock status integration", () => {
     expect(dev.lock?.()?.locked).toBe(false);
     expect(internal.registry.dpParams.get(SN)).toBeUndefined();
   });
-  it("prefers reported parent identity and timezone and falls back to device fields", async () => {
-    const { internal } = harness();
+  it("uses device identity and the parent station time_zone for public controls", async () => {
+    const { client, internal } = harness();
+    const query = vi.fn().mockResolvedValue({ code: 0, slState: "3", slBattery: "65" });
+    vi.spyOn(internal, "mediaProviderFor").mockReturnValue({ p2pQuery: query });
     const ctx = await internal.commandContext(SN);
     expect(ctx).toMatchObject({
-      adminUserId: "station-admin",
-      shortUserId: "0001",
-      accountName: "synthetic-member",
-      timezone: "reported-vendor-zone",
-    });
-    internal.registry.devices[1].raw.member = {};
-    delete internal.registry.devices[1].raw.timezone;
-    expect(await internal.commandContext(SN)).toMatchObject({
       adminUserId: "device-admin",
       shortUserId: "0002",
-      timezone: "UTC0",
+      stationModel: "T8030",
+      timezone: "reported-vendor-zone",
     });
-  });
-  it.each([
-    [{ timezone: "parent-zone", time_zone: "parent-alias" }, { timezone: "device-zone" }, "parent-zone"],
-    [{ time_zone: "parent-alias" }, { timezone: "device-zone" }, "parent-alias"],
-    [{}, { timezone: "device-zone", time_zone: "device-alias" }, "device-zone"],
-    [{ time_zone: "" }, { time_zone: "device-alias" }, "device-alias"],
-  ])(
-    "exposes public status reads using reported timezone fields (%j, %j)",
-    async (parentZone, deviceZone, expected) => {
-      const { client, internal } = harness();
-      for (const entry of internal.registry.devices) delete entry.raw.timezone;
-      Object.assign(internal.registry.devices[1].raw, parentZone);
-      Object.assign(internal.registry.devices[0].raw, deviceZone);
-      const query = vi.fn().mockResolvedValue({ code: 0, slState: "3", slBattery: "65" });
-      vi.spyOn(internal, "mediaProviderFor").mockReturnValue({ p2pQuery: query });
-      const dev = await client.getDevice(SN);
-      expect(dev.lock?.()?.refreshStatus).toBeTypeOf("function");
-      await expect(dev.lock?.()?.refreshStatus?.()).resolves.toBe(false);
-      expect(query).toHaveBeenCalledExactlyOnceWith(1955, {
-        payload: { timezone: expected },
-        accountId: "station-admin",
-      });
-    },
-  );
-  it("keeps realtime status above a stale cloud refresh using the real registry", async () => {
-    const mega = {
-      post: async (_service: string, path: string) =>
-        path.endsWith("get_house_list")
-          ? { house_infos: [] }
-          : {
-              devices: [
-                {
-                  device_sn: SN,
-                  device_model: "T8530",
-                  category: "eufy_security",
-                  device_type: 55,
-                  parent_sn: HUB,
-                  device_channel: 7,
-                  params: [{ param_type: 6000, param_value: "3" }],
-                },
-              ],
-            },
-      getDeviceParamList: async () => ({}),
-    };
-    const registry = new DeviceRegistry({ mega: mega as never, onError: () => {} });
-    await registry.record(SN);
-    registry.applyRealtimeParams(SN, { 6000: "4" });
-    const fresh = await registry.record(SN);
-    expect(fresh.dpParams?.[6000]).toBe("4");
+    expect(ctx.accountName).toBe("test");
+    const dev = await client.getDevice(SN);
+    expect(dev.lock?.()?.lock).toBeTypeOf("function");
+    await expect(dev.lock?.()?.refreshStatus?.()).resolves.toBe(false);
+    expect(query).toHaveBeenCalledExactlyOnceWith(1955, {
+      payload: { timezone: "reported-vendor-zone" },
+    });
+    delete internal.registry.devices[1].raw.time_zone;
+    const withoutTimezone = await client.getDevice(SN);
+    expect(withoutTimezone.lock?.()?.refreshStatus).toBeUndefined();
   });
 });

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { LOCK, type LockActions } from "../lock.js";
+import { LOCK, LOCK_MEMBERS, type LockActions } from "../lock.js";
 import { bind } from "./bind.js";
 import { Device } from "../../device.js";
 import type { CommandContext, InboundSignal } from "../types.js";
@@ -17,6 +17,8 @@ const ctx: CommandContext = {
   accountName: "synthetic-member",
   timezone: "UTC0",
   hasP2p: true,
+  homeBaseAttached: true,
+  stationModel: "T8030",
 };
 const signal = (payload: unknown, deviceType = 55): InboundSignal => ({
   source: "p2p-frame",
@@ -33,21 +35,40 @@ describe("native video lock", () => {
     ["unlock", 0],
   ] as const)("%s sends one native intent with numeric operation", async (action, operation) => {
     const { acts, sent } = bind<LockActions>("lock", ctx);
-    await acts[action]();
+    await acts[action]!();
     expect(sent).toEqual([
       {
-        kind: "set-payload-once",
+        kind: "set-payload",
         cmd: 1961,
-        accountId: ctx.adminUserId,
+        channel: ctx.channel,
+        mValue3: 0,
         payload: { shortUserId: "0001", slOperation: operation, userId: ctx.adminUserId, userName: ctx.accountName },
       },
     ]);
+  });
+  it.each([
+    [false, undefined],
+    [true, "T8021"],
+    [true, undefined],
+    [false, "T8030"],
+  ] as const)("withholds native actuation on an unverified route (%s, %s)", async (homeBaseAttached, stationModel) => {
+    const context = { ...ctx, homeBaseAttached, stationModel };
+    const { acts, sent } = bind<LockActions>("lock", context);
+    for (const action of ["lock", "unlock"] as const) {
+      expect(acts[action]).toBeUndefined();
+      const dispatch = vi.fn();
+      await expect(
+        LOCK_MEMBERS[action].method({ ctx: context, sink: { dispatch }, read: () => undefined })(),
+      ).rejects.toThrow(/unverified/);
+      expect(dispatch).not.toHaveBeenCalled();
+    }
+    expect(sent).toEqual([]);
   });
   it.each(["adminUserId", "shortUserId", "accountName"] as const)(
     "refuses missing %s before sending",
     async (field) => {
       const { acts, sent } = bind<LockActions>("lock", { ...ctx, [field]: undefined });
-      await expect(acts.lock()).rejects.toThrow(/missing member identity/);
+      await expect(acts.lock!()).rejects.toThrow(/missing member identity/);
       expect(sent).toEqual([]);
     },
   );
@@ -66,14 +87,14 @@ describe("native video lock", () => {
     await expect(acts.refreshStatus!()).resolves.toBe(
       state === 3 || state === "3" ? false : state === 4 || state === "4" ? true : undefined,
     );
-    expect(query).toHaveBeenCalledWith(1955, { payload: { timezone: "UTC0" }, accountId: "synthetic-admin" });
+    expect(query).toHaveBeenCalledWith(1955, { payload: { timezone: "UTC0" } });
   });
   it("rejects correctly attributed device errors", async () => {
     const query = vi.fn().mockResolvedValue({ code: -106, slState: "3" });
     const media = { p2pQuery: query } as unknown as MediaProvider;
     await expect(bind<LockActions>("lock", ctx, { media }).acts.refreshStatus!()).rejects.toThrow(/-106/);
   });
-  it.each(["media", "query", "timezone", "identity"])("omits refreshStatus without %s", (missing) => {
+  it.each(["media", "query", "timezone"])("omits refreshStatus without %s", (missing) => {
     const query = vi.fn();
     const media =
       missing === "media"
@@ -82,7 +103,6 @@ describe("native video lock", () => {
     const context = {
       ...ctx,
       timezone: missing === "timezone" ? undefined : ctx.timezone,
-      adminUserId: missing === "identity" ? undefined : ctx.adminUserId,
     };
     const { acts } = bind<LockActions>("lock", context, { media });
     expect(acts.refreshStatus).toBeUndefined();

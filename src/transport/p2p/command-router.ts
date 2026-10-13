@@ -268,9 +268,6 @@ export interface P2PRouterDeps {
 }
 
 export class P2PCommandRouter {
-  /** Identical payload queries have no request id and cannot be outstanding together. */
-  private readonly pendingPayloadQueries = new Set<string>();
-
   /** P2P session lifecycle: on-demand open + battery-aware idle-detach + refcount, per session key. */
   private readonly manager: SessionManager;
   /** Error objects already forwarded while a station startup awaits the same session signal. */
@@ -671,13 +668,6 @@ export class P2PCommandRouter {
       case "p2p-privacy-burst":
         await this.sendPrivacyBurst(sn, cmd.enabled);
         return;
-      case "set-payload-once": {
-        const { session, channel } = await this.resolveSession(sn, { waitLevel2: true });
-        if (!cmd.accountId) throw new Error("set-payload-once requires member identity");
-        if (!session.sendControlLevel2(cmd.cmd, channel, cmd.accountId, cmd.payload, 0))
-          throw new Error("set-payload-once send failed");
-        return;
-      }
       case "ff09-actuate":
         await this.sendFf09Actuate(sn, cmd);
         return;
@@ -1335,12 +1325,9 @@ export class P2PCommandRouter {
   async p2pQuery(
     sn: string,
     subCmd: number,
-    opts: { timeoutMs?: number; payload?: Record<string, unknown>; accountId?: string } = {},
+    opts: { timeoutMs?: number; payload?: Record<string, unknown> } = {},
   ): Promise<Record<string, unknown>> {
-    const { session, parentSn, channel, accountId } = await this.resolveSession(sn, { waitLevel2: true });
-    const key = `${parentSn}:${channel}:${subCmd}`;
-    if (this.pendingPayloadQueries.has(key)) throw new Error("p2p query already pending on this channel");
-    this.pendingPayloadQueries.add(key);
+    const { session, channel, accountId } = await this.resolveSession(sn, { waitLevel2: true });
     const timeoutMs = opts.timeoutMs ?? 15000;
     return await new Promise<Record<string, unknown>>((resolve, reject) => {
       const timer = setTimeout(() => {
@@ -1364,21 +1351,14 @@ export class P2PCommandRouter {
       const cleanup = (): void => {
         clearTimeout(timer);
         session.off("data", onData);
-        session.off("close", onClose);
-        this.pendingPayloadQueries.delete(key);
       };
-      const onClose = (): void => {
-        cleanup();
-        reject(new Error("p2p query session closed"));
-      };
-      session.on("close", onClose);
       session.on("data", onData);
       // SET_PAYLOAD(1350) wrapping {account_id, cmd:subCmd, mChannel, mValue3:0, payload:{}} on the device channel.
       // sendSetPayload can throw synchronously (e.g. "not connected"); clean up the listener + timer
       // so they don't dangle until the timeout, then propagate the failure.
       try {
         if (opts.payload) {
-          if (!session.sendControlLevel2(subCmd, channel, opts.accountId ?? accountId, opts.payload, 0))
+          if (!session.sendControlLevel2(subCmd, channel, accountId, opts.payload, 0))
             throw new Error("p2p query send failed");
         } else session.sendSetPayload(subCmd, {}, { accountId, channel });
       } catch (e) {

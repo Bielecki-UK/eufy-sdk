@@ -76,7 +76,7 @@ import {
   type DeviceInspection,
   type RawParams,
 } from "../model/index.js";
-import { isHomeBase, isNvrT8N00, isStation9000, isVideoSmartLock } from "../model/device-family.js";
+import { isHomeBase, isNvrT8N00, isStation9000 } from "../model/device-family.js";
 import { cameraPowerTier } from "../model/capabilities/battery.js";
 import { DeviceRegistry, type DeviceRecord, type ParamChange } from "./device-registry.js";
 import type {
@@ -1159,7 +1159,6 @@ export class EufyMega extends EventEmitter {
       if (dev.category === "eufy_home_tuya") return this.tuya.dispatchCommand(sn, cmd);
       return this.mqtt.dispatchCommand(sn, cmd);
     }
-    if (cmd.kind === "set-payload-once") return this.p2p.dispatchCommand(sn, cmd);
     const route = this.rtcRouteFor(sn);
     if (route) {
       if (route.attached && this.registry.serialForFrame(route.stationSn, cmd.channel) !== sn)
@@ -2165,9 +2164,8 @@ export class EufyMega extends EventEmitter {
     const rawChannel = raw.device_channel;
     const channel = typeof rawChannel === "number" ? rawChannel : 0;
     const member = (raw.member ?? {}) as Record<string, any>;
-    const parentRaw = this.registry.list().find((d) => d.sn === rec.parentSn)?.raw as Record<string, any> | undefined;
-    const parentMember = parentRaw?.member as Record<string, any> | undefined;
-    const nativeIdentity = isVideoSmartLock(rec);
+    const parent = this.registry.list().find((d) => d.sn === rec.parentSn);
+    const parentRaw = parent?.raw as Record<string, any> | undefined;
     const resolved = resolveDevice(rec);
     const dpCatalog =
       (resolved.codec === "vacuum" || resolved.codec === "mower") && rec.model
@@ -2175,11 +2173,8 @@ export class EufyMega extends EventEmitter {
         : undefined;
     return {
       channel,
-      timezone:
-        recordString(parentRaw ?? {}, "timezone") ??
-        recordString(parentRaw ?? {}, "time_zone") ??
-        recordString(raw, "timezone") ??
-        recordString(raw, "time_zone"),
+      stationModel: parent?.model,
+      timezone: recordString(parentRaw ?? {}, "time_zone"),
       codec: resolved.codec,
       deviceType: rec.deviceType,
       model: rec.model,
@@ -2199,17 +2194,9 @@ export class EufyMega extends EventEmitter {
       paramIds: new Set([...Object.keys(rec.params), ...Object.keys(rec.dpParams ?? {})].map(Number)),
       capabilities: new Set(resolved.capabilities),
       // Member identity for ff09-* command devices (see core/contracts Ff09Identity).
-      adminUserId:
-        (nativeIdentity ? recordString(parentMember ?? {}, "admin_user_id") : undefined) ??
-        recordString(member, "admin_user_id"),
-      shortUserId:
-        (nativeIdentity ? recordString(parentMember ?? {}, "short_user_id") : undefined) ??
-        recordString(member, "short_user_id"),
-      accountName:
-        (nativeIdentity
-          ? (recordString(parentMember ?? {}, "nick_name") ?? recordString(member, "nick_name"))
-          : undefined) ??
-        (this.mega.accountName || undefined),
+      adminUserId: typeof member.admin_user_id === "string" ? member.admin_user_id : undefined,
+      shortUserId: typeof member.short_user_id === "string" ? member.short_user_id : undefined,
+      accountName: this.mega.accountName || undefined,
       // The same claim the command sink routes on — a capability gates its P2P-only variants (e.g.
       // setRainMode) on this. Keyed on the P2P stack's own predicate (a usable `p2p_did` endpoint).
       hasP2p: P2PCommandRouter.claimsDevice(dev),

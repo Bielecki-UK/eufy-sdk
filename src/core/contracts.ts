@@ -408,8 +408,6 @@ export type Command =
   | { kind: "p2p-station-scalar"; cmd: number; value: number; channel: number }
   /** P2P int-plus-string frame; the transport injects the authenticated account id string. */
   | { kind: "p2p-int-string"; cmd: number; value: number; valueSub: number; channel: number }
-  /** One level-2 envelope, without replay or optimistic state mutation. */
-  | { kind: "set-payload-once"; cmd: number; payload: Record<string, unknown>; accountId: string }
   | ({ kind: "ff09-actuate" } & Ff09Identity)
   | { kind: "ff09-autolock"; adminUserId: string; deviceSn: string; enabled: boolean; delaySeconds?: number }
   | { kind: "ff09-setting-toggle"; adminUserId: string; deviceSn: string; settingId: number; value: boolean }
@@ -927,7 +925,7 @@ export interface MediaProvider {
    */
   p2pQuery?(
     subCmd: number,
-    opts?: { timeoutMs?: number; payload?: Record<string, unknown>; accountId?: string },
+    opts?: { timeoutMs?: number; payload?: Record<string, unknown> },
   ): Promise<Record<string, unknown>>;
   /**
    * Generic control-payload request/reply query: send a `CONTROL_PAYLOAD` (1700) `{commandType,data}`

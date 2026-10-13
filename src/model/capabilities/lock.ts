@@ -57,6 +57,7 @@ const VIDEO_LOCK_CMD = { ACTUATE: 1961, STATUS: 1955, NOTIFY: 1351 } as const;
  * frame carries the member fields — and a generated "not a valid value" message would misreport it.
  */
 function actuate(engage: boolean, ctx: CommandContext, sink: CommandSink): Promise<void> {
+  if (!actuationAvailable(ctx)) return Promise.reject(new Error("lock: native actuation is unverified on this route"));
   if (!ctx.adminUserId || !ctx.shortUserId || (isVideoSmartLock(ctx) && !ctx.accountName)) {
     return Promise.reject(
       new Error(
@@ -66,9 +67,10 @@ function actuate(engage: boolean, ctx: CommandContext, sink: CommandSink): Promi
   }
   if (isVideoSmartLock(ctx)) {
     return sink.dispatch({
-      kind: "set-payload-once",
+      kind: "set-payload",
       cmd: VIDEO_LOCK_CMD.ACTUATE,
-      accountId: ctx.adminUserId,
+      channel: ctx.channel,
+      mValue3: 0,
       payload: {
         shortUserId: ctx.shortUserId,
         slOperation: engage ? 1 : 0,
@@ -108,15 +110,18 @@ function settingToggle(settingId: number, name: string, enabled: boolean, ctx: C
  */
 const overP2p = (ctx: AvailabilityContext): boolean => ctx.hasP2p === true && !isVideoSmartLock(ctx);
 
+/** Native actuation is verified only on the HomeBase 3 route; other lock families retain their controls. */
+function actuationAvailable(ctx: CommandContext): boolean {
+  return !isVideoSmartLock(ctx) || (ctx.homeBaseAttached === true && ctx.stationModel === "T8030");
+}
+
 /** Live status read; unknown states remain unknown and device refusals reject. */
 async function refreshStatus(
   query: NonNullable<MediaProvider["p2pQuery"]>,
   timezone: string,
-  accountId: string,
 ): Promise<boolean | undefined> {
   const payload = await query(VIDEO_LOCK_CMD.STATUS, {
     payload: { timezone },
-    accountId,
   });
   if (payload.code !== 0) throw new Error(`lock.refreshStatus: device result ${String(payload.code)}`);
   return nativeState(payload.slState);
@@ -202,12 +207,13 @@ export const LOCK_MEMBERS = {
     description: "Lock signal strength (verified: param 1141 = RSSI).",
   },
 
-  /** Lock the deadbolt/door. Resolves after sending; does not confirm physical state. Use refreshStatus when available. */
+  /** Lock the deadbolt/door. Resolves after sending; does not confirm physical state. */
   lock: method(
     ({ ctx, sink }) =>
       (): Promise<void> =>
         actuate(true, ctx, sink),
     "Lock the deadbolt/door.",
+    actuationAvailable,
   ),
   /** Unlock the deadbolt/door. Resolves after sending; does not confirm physical state. */
   unlock: method(
@@ -215,6 +221,7 @@ export const LOCK_MEMBERS = {
       (): Promise<void> =>
         actuate(false, ctx, sink),
     "Unlock the deadbolt/door.",
+    actuationAvailable,
   ),
 
   /**
@@ -359,10 +366,7 @@ export const LOCK_MEMBERS = {
       (media, { ctx }) => {
         const query = media.p2pQuery?.bind(media);
         const timezone = ctx.timezone;
-        const accountId = ctx.adminUserId;
-        return isVideoSmartLock(ctx) && timezone && accountId && query
-          ? () => refreshStatus(query, timezone, accountId)
-          : undefined;
+        return isVideoSmartLock(ctx) && timezone && query ? () => refreshStatus(query, timezone) : undefined;
       },
       "Read the current lock state from the device.",
     ),
@@ -431,14 +435,7 @@ export const LOCK: CapabilityModule = {
     if (!report) return null;
     const params: Record<number, string> = {};
     if (nativeState(report.slState) !== undefined) params[6000] = String(report.slState);
-    if (
-      report.slBattery !== undefined &&
-      report.slBattery !== "" &&
-      (typeof report.slBattery === "string" || typeof report.slBattery === "number")
-    ) {
-      const battery = Number(report.slBattery);
-      if (Number.isFinite(battery) && battery >= 0 && battery <= 100) params[6001] = String(battery);
-    }
+    if (report.slBattery !== undefined) params[6001] = String(report.slBattery);
     return { params };
   },
   decodeEvent(signal) {

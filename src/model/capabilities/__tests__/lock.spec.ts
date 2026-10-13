@@ -269,9 +269,9 @@ const _rssi: Exact<typeof lk.rssi, number | undefined> = true;
 // A read-only member gets no setter — `locked` has no confirmed write param.
 const _noSetLocked: Exact<"setLocked" extends keyof LockActions ? true : false, false> = true;
 
-// Both actuation methods are verified on the supported lock families.
-const _lockRequired: Exact<undefined extends typeof lk.lock ? true : false, false> = true;
-const _lockArgs: Exact<Parameters<typeof lk.lock>, []> = true;
+// Native actuation is absent on unverified station routes.
+const _lockRequired: Exact<undefined extends typeof lk.lock ? true : false, true> = true;
+const _lockArgs: Exact<Parameters<NonNullable<typeof lk.lock>>, []> = true;
 
 // Topology-gated: rain mode exists on the P2P video lock, not on the MQTT garage door.
 const _rainOptional: Exact<undefined extends typeof lk.setRainMode ? true : false, true> = true;

@@ -302,6 +302,17 @@ describe("doorbell — confirmed against real T8214", () => {
     expect(dev.properties.find((p) => p.name === "solarIntensity")?.reported).toBe(true);
   });
 
+  it("flags a realtime member reported only once its value arrives, keeping its getter before that", () => {
+    const record = { model: "T8L02", category: "eufy_life", params: {} };
+    const dev = Device.fromRecord("T8L02R", record);
+    expect(dev.properties.find((p) => p.name === "lightPower")?.reported).toBe(false);
+    dev.bindActions(
+      { codec: "light", model: "T8L02", category: "eufy_life", channel: 0, paramIds: new Set<number>() },
+      { dispatch: async () => {} },
+    );
+    expect("power" in (dev.smartLight?.() ?? {})).toBe(true);
+  });
+
   it("decodes real doorbell param values (chime on, ringtone vol 80, notification JSON)", () => {
     const dev = Device.fromRecord("T8214DB", {
       model: "T8214",

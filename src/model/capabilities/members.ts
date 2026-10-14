@@ -630,7 +630,9 @@ export function propertiesOf(members: Members, ctx?: AvailabilityContext): Prope
         raw: m.decode ? true : undefined,
         readAliases: aliases?.slice(promoted ? 1 : 0).map(({ paramType, invert }) => ({ paramType, invert })),
         writable: m.write !== undefined || m.writtenElsewhere === true,
-        reported: ctx?.paramIds ? reported(m, members, { ...ctx, paramIds: ctx.paramIds }) : undefined,
+        reported: ctx?.paramIds
+          ? wasReported(m, borrowedBy(m, members), { ...ctx, paramIds: ctx.paramIds })
+          : undefined,
         description: m.description,
       },
     ];
@@ -838,21 +840,30 @@ export function narrow(
  */
 function reads(
   m: Pick<ValueMember, "param" | "realtime" | "readAvailable" | "readAliases">,
+  ctx: CommandContext,
+): boolean {
+  return m.realtime === true || sent(m, ctx);
+}
+
+/** Whether the device sent a member's own param or one of its read aliases. */
+function sent(
+  m: Pick<ValueMember, "param" | "readAvailable" | "readAliases">,
   ctx: AvailabilityContext & { readonly paramIds: ReadonlySet<number> },
 ): boolean {
-  if (m.realtime === true) return true;
   if ((!m.readAvailable || m.readAvailable(ctx)) && m.param !== undefined && ctx.paramIds.has(m.param)) return true;
   return m.readAliases?.some((a) => (!a.available || a.available(ctx)) && ctx.paramIds.has(a.paramType)) === true;
 }
 
-/** Whether the device reported a member's value: its own wire, an alias, or the payload it reads from. */
-function reported(
-  m: ValueMember,
-  members: Members,
+/**
+ * Whether the device has reported a member's value: its own param, a read alias, or the payload it reads
+ * from. Unlike {@link reads}, a `realtime` member counts only once its value has arrived.
+ */
+function wasReported(
+  m: Pick<ValueMember, "param" | "readAvailable" | "readAliases">,
+  from: { param: number } | undefined,
   ctx: AvailabilityContext & { readonly paramIds: ReadonlySet<number> },
 ): boolean {
-  const from = borrowedBy(m, members);
-  return reads(m, ctx) || (from !== undefined && ctx.paramIds.has(from.param));
+  return sent(m, ctx) || (from !== undefined && ctx.paramIds.has(from.param));
 }
 
 /**
@@ -931,8 +942,8 @@ export function bindMembers<M extends Members>(members: M, deps: MemberDeps): Su
     const available = !m.available || m.available(ctx);
     // Either wire is evidence: the member's own param where it has one, or the owner's payload that
     // carries the same value on the other device family.
-    const isReported = available && reported(m as ValueMember, members, ctx);
-    if (isReported && !m.writeOnly && !m.unexposed) {
+    const reported = available && (reads(m, ctx) || (from !== undefined && ctx.paramIds.has(from.param)));
+    if (reported && !m.writeOnly && !m.unexposed) {
       const decode = m.decode;
       // The member's own wire wins; the owner's payload is the fallback for a device that does not
       // speak it. One `decode` sees whichever arrived and discriminates on the value's shape.
@@ -944,7 +955,7 @@ export function bindMembers<M extends Members>(members: M, deps: MemberDeps): Su
     if (m.writeOnly) unobservable.push(name);
     else if (m.readReflectsWrite && !m.readReflectsWrite(ctx)) unreflected.push(name);
     const setter = m.writeAs ?? `set${name[0].toUpperCase()}${name.slice(1)}`;
-    out[setter] = describedAction(describeWrite(name, m, isReported), (value: boolean | number | string) => {
+    out[setter] = describedAction(describeWrite(name, m, reported), (value: boolean | number | string) => {
       try {
         return sink.dispatch(memberWrite(name, m, value, ctx));
       } catch (e) {

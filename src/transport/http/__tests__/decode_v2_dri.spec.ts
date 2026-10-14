@@ -80,3 +80,15 @@ describe("decodeImageV2 with the chroma tables in the encrypted prefix", () => {
     expect(decodeImageV2(broken)).toBeNull();
   });
 });
+
+describe("decodeImageV2 with the plaintext cut at the SOS and no DRI", () => {
+  it("reconstructs a decodable JPEG from a tail that starts at the SOS itself", () => {
+    const jpeg = Buffer.from(jpegEncode({ width: WIDTH, height: HEIGHT, data: picture() }, 85).data);
+    const blob = Buffer.concat([Buffer.from("v2_eufysecurity:"), garbage(600, 6), jpeg.subarray(jpeg.indexOf(SOS))]);
+    expect(blob.indexOf(DRI_ZERO)).toBe(-1);
+    const out = decodeImageV2(blob);
+    expect(out).not.toBeNull();
+    const image = jpegDecode(out!, { useTArray: true });
+    expect({ width: image.width, height: image.height }).toEqual({ width: WIDTH, height: HEIGHT });
+  });
+});

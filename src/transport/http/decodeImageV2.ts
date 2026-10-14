@@ -6,8 +6,9 @@
  *   - the prefix is SOI + APP0 + the two quantization tables + the SOF dimensions + the luma Huffman
  *     tables, and the plaintext tail starts at the standard DC-chrominance Huffman table
  *     (`FF C4 00 1F 01`) — the chroma DHTs, the SOS and the entire entropy-coded scan;
- *   - the prefix also covers the chroma Huffman tables, and the plaintext tail starts at a DRI segment
- *     (`FF DD 00 04`) immediately followed by the 3-component SOS header and the scan. The standard
+ *   - the prefix also covers the chroma Huffman tables, and the plaintext tail starts at the
+ *     3-component SOS header and the scan, with the DRI segment (`FF DD 00 04`) in front when the
+ *     image has one (the only form seen so far). The standard
  *     Annex-K chroma tables are put back in front of that tail, which makes it the first form.
  * So we reconstruct a viewable image by splicing a freshly built standard JPEG header (correct
  * width/height/chroma-subsampling) onto that plaintext tail.
@@ -60,9 +61,9 @@ const V2_PREFIX = "v2_eufysecurity:";
 const DC_CHROMA = Buffer.from([0xff, 0xc4, 0x00, 0x1f, 0x01]);
 
 /**
- * The plaintext start of a v2 blob whose chroma Huffman tables are encrypted too: a DRI segment
- * (`FF DD`, length 4) whose two interval bytes are followed by the SOS header of a 3-component scan
- * (`FF DA`, length 12).
+ * The plaintext start of a v2 blob whose chroma Huffman tables are encrypted too: the SOS header of a
+ * 3-component scan (`FF DA`, length 12), with a DRI segment (`FF DD`, length 4, then two interval
+ * bytes) directly in front of it when the image has one.
  */
 const DRI_SEGMENT = Buffer.from([0xff, 0xdd, 0x00, 0x04]);
 const SOS_HEADER = Buffer.from([0xff, 0xda, 0x00, 0x0c, 0x03]);
@@ -362,18 +363,18 @@ function findGeometry(tail: Buffer): Geometry | null {
 }
 
 /**
- * Where the plaintext DRI + SOS starts in a v2 blob, or -1 when it has none.
+ * Where the plaintext scan header starts in a v2 blob, or -1 when it has none: the last 3-component
+ * SOS, or the DRI segment directly in front of it when there is one.
  *
- * The last match wins: the entropy-coded scan after the real SOS stuffs every `FF` data byte with `00`,
- * so `FF DD` cannot occur there, and an earlier match can only be encrypted bytes that happen to take
- * the same shape.
+ * The last SOS wins: the entropy-coded scan after the real SOS stuffs every `FF` data byte with `00`,
+ * so `FF DA` cannot occur there, and an earlier match can only be encrypted bytes that happen to take
+ * the same shape. A tail cut at the wrong place still fails the geometry search and the probe decode.
  */
-function findDriCut(data: Buffer): number {
-  for (let at = data.lastIndexOf(DRI_SEGMENT); at >= 0; at = at > 0 ? data.lastIndexOf(DRI_SEGMENT, at - 1) : -1) {
-    const sos = at + DRI_SEGMENT.length + 2;
-    if (data.subarray(sos, sos + SOS_HEADER.length).equals(SOS_HEADER)) return at;
-  }
-  return -1;
+function findScanCut(data: Buffer): number {
+  const sos = data.lastIndexOf(SOS_HEADER);
+  if (sos < 0) return -1;
+  const dri = sos - DRI_SEGMENT.length - 2;
+  return dri >= 0 && data.subarray(dri, dri + DRI_SEGMENT.length).equals(DRI_SEGMENT) ? dri : sos;
 }
 
 /**
@@ -381,15 +382,15 @@ function findDriCut(data: Buffer): number {
  * plaintext start.
  *
  * A blob cut at the DC-chroma DHT carries those tables itself and its tail is returned as it is. A blob
- * cut at DRI + SOS lost them with the encrypted prefix; the standard Annex-K chroma DHTs are prepended,
+ * cut at the SOS (or a DRI right before it) lost them with the encrypted prefix; the standard Annex-K chroma DHTs are prepended,
  * which yields the same shape of tail.
  */
 function plaintextTail(data: Buffer): Buffer | null {
   const cut = data.indexOf(DC_CHROMA);
   if (cut >= 0) return data.subarray(cut);
-  const dri = findDriCut(data);
-  if (dri < 0) return null;
-  return Buffer.concat([DHT_DC_CHROMA, DHT_AC_CHROMA, data.subarray(dri)]);
+  const scan = findScanCut(data);
+  if (scan < 0) return null;
+  return Buffer.concat([DHT_DC_CHROMA, DHT_AC_CHROMA, data.subarray(scan)]);
 }
 
 /** True if the blob is a v2 `v2_eufysecurity:` push thumbnail. */
@@ -400,7 +401,7 @@ export function isV2Image(data: Buffer): boolean {
 /**
  * Decode a v2 blob to a plain JPEG buffer by reconstructing its header, or null if it isn't v2, the
  * plaintext scan can't be located, or no frame shape explains it. The plaintext tail starts either at
- * the DC-chroma DHT or at a DRI segment followed by the SOS; the second form gets the standard chroma
+ * the DC-chroma DHT or at the SOS, with or without a DRI segment in front; the second form gets the standard chroma
  * DHTs in front of it (see `plaintextTail`).
  *
  * Three steps and no pixel rewrite: the frame shape is read out of the entropy scan,

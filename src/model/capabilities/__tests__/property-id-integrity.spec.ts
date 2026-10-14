@@ -1,4 +1,5 @@
-import { CAPABILITY_MODULES } from "../index.js";
+import { CAPABILITY_MODULES, detectCapabilities } from "../index.js";
+import { MODEL_REGISTRY } from "../../registry.js";
 import { SECURITY_PARAMS, CLEAN_PARAMS, DISPLAY_PARAMS, MOWER_PARAMS } from "../../param-dictionary.js";
 import { namespaceForCodec } from "../../param-namespace.js";
 import { LIFE_PARAMS } from "../../life-params.js";
@@ -108,7 +109,14 @@ describe("property id integrity (cross-module)", () => {
     const owners = new Map<string, string[]>();
     for (const [cap, m] of Object.entries(CAPABILITY_MODULES)) {
       const line = (m as Mod).line ?? "security";
-      const codecs = (m as Mod).detection?.codecs ?? [];
+      const detection = (m as Mod).detection;
+      const codecs =
+        detection?.codecs ??
+        (detection?.detect
+          ? Object.entries(MODEL_REGISTRY)
+              .filter(([model, row]) => detectCapabilities({ model }, row.codec).includes(cap as never))
+              .map(([, row]) => row.codec)
+          : []);
       const spaces = new Set(codecs.map((c) => namespaceForCodec(c)));
       const space = spaces.size === 1 ? [...spaces][0] : line;
       for (const p of (m as Mod).properties ?? []) {

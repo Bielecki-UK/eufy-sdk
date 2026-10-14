@@ -18,8 +18,13 @@ describe("mower capability module", () => {
   it("is the mower codec's clean-line capability", () => {
     expect(MOWER.capability).toBe("mower");
     expect(MOWER.line).toBe("clean");
-    expect(MOWER.detection?.codecs).toEqual(["mower"]);
     expect(detectCapabilities({ model: "T2880", category: "eufy_home_tuya" }, "mower")).toContain("mower");
+  });
+
+  it("is not attached to a mower model with no schema or report in hand (E18, C15)", () => {
+    for (const model of ["T2801", "T280B"]) {
+      expect(detectCapabilities({ model, category: "eufy_home_tuya" }, "mower"), model).not.toContain("mower");
+    }
   });
 
   it("is not attached to a vacuum", () => {

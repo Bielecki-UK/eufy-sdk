@@ -548,11 +548,6 @@ export const CAMERA_MEMBERS = {
    * 1035, standalone indoor/outdoor cams under 2001 OPEN_DEVICE with direct polarity, so 2001 is a
    * read-alias. Both verified live, and the write polarity is confirmed against the app's own frames.
    *
-   * The read and the setter observe the SAME wire — see `powerCommand` — which is what makes this value
-   * track what it is told, and what lets `enablementReflection` confirm a write. The S350 is the
-   * exception: it is written through the privacy burst, which no reported param has been seen to follow, so
-   * it is named by `unreflectedMembers` and its write dispatches unobserved.
-   *
    * T8410 on HomeBase 3 reports 1035 as an enable bit ("1" ⇒ ON). That reported state does not reliably
    * reflect the privacy command. `readReflectsWrite` states this distinction.
    *

@@ -446,12 +446,12 @@ describe("camera capability module", () => {
     });
 
     /**
-     * Every family but the S350 one writes the on/off param.
+     * Every family but the attached S350 writes the on/off param.
      *
      * Confirmed against the current app's own frames: across six cameras of four device types and both
      * topologies every on/off it sent was `1035`. None of those cameras was an S350.
      */
-    it("every non-S350 family writes the on/off param, none the privacy envelope", () => {
+    it("every family but the attached S350 writes the on/off param, none the privacy envelope", () => {
       for (const deviceType of [DeviceType.INDOOR_COST_DOWN_CAMERA, DeviceType.OUTDOOR_PT_CAMERA]) {
         expect(buildCommand("on", true, ctx(2, { deviceType }))).toMatchObject({
           kind: "set-param",

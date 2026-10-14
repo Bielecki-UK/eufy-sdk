@@ -287,6 +287,12 @@ describe("doorbell — confirmed against real T8214", () => {
     expect(r.name).toBe("Video Doorbell Dual");
   });
 
+  it("types the T8210C variant as a doorbell, like the T8210", () => {
+    const r = resolveDevice({ model: "T8210C", deviceType: 7 });
+    expect(r.capabilities).toContain("doorbell");
+    expect(r.name).toBe("Video Doorbell");
+  });
+
   it("decodes real doorbell param values (chime on, ringtone vol 80, notification JSON)", () => {
     const dev = Device.fromRecord("T8214DB", {
       model: "T8214",

@@ -712,4 +712,70 @@ describe("RtcCommandRouter keepWarm", () => {
         router.close();
       }
     }));
+
+  it("leaves no close listener on the session once a hold is disposed, across repeated cycles", () =>
+    onWarmTimers(async () => {
+      const { router, sessions } = makeRouter();
+      try {
+        await router.dispatchCommand(ST, arming(1));
+        const s = sessions[0]!;
+        const before = s.listenerCount("close");
+        for (let i = 0; i < 12; i++) {
+          const dispose = router.keepWarm(ST);
+          await settle();
+          dispose();
+        }
+        expect(sessions).toHaveLength(1);
+        expect(s.listenerCount("close")).toBe(before);
+      } finally {
+        router.close();
+      }
+    }));
+
+  it("arms no keepalive when disposed before the bring-up finishes, and the session idle-closes", () =>
+    onWarmTimers(async () => {
+      const { router, sessions } = makeRouter();
+      try {
+        const dispose = router.keepWarm(ST);
+        dispose();
+        await settle();
+        expect(sessions).toHaveLength(1);
+        const s = sessions[0]!;
+        expect(s.closed).toBe(false);
+        await vi.advanceTimersByTimeAsync(PORTAL_KEEPALIVE_MS);
+        expect(s.raw).toHaveLength(0);
+        await vi.advanceTimersByTimeAsync(IDLE_CLOSE_MS - PORTAL_KEEPALIVE_MS);
+        expect(s.closed).toBe(true);
+        expect(s.raw).toHaveLength(0);
+      } finally {
+        router.close();
+      }
+    }));
+
+  it("clears the hold and reports a failed bring-up, and a later keepWarm opens a fresh session", () =>
+    onWarmTimers(async () => {
+      const onError = vi.fn();
+      const { router, sessions } = makeRouter({ onError });
+      FakeSession.connectMode = "throw";
+      try {
+        const first = router.keepWarm(ST);
+        await settle();
+        expect(onError).toHaveBeenCalledOnce();
+        expect(onError.mock.calls[0]![0]).toBeInstanceOf(Error);
+        expect((onError.mock.calls[0]![0] as Error).message).toMatch(/sign refused/);
+        expect(sessions).toHaveLength(1);
+        expect(sessions[0]!.closed).toBe(true);
+        FakeSession.connectMode = "up";
+        const second = router.keepWarm(ST);
+        expect(second).not.toBe(first);
+        await settle();
+        expect(sessions).toHaveLength(2);
+        const s = sessions[1]!;
+        await vi.advanceTimersByTimeAsync(PORTAL_KEEPALIVE_MS);
+        expect(s.raw).toEqual([PORTAL_KEEPALIVE]);
+      } finally {
+        FakeSession.connectMode = "up";
+        router.close();
+      }
+    }));
 });

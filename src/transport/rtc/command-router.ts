@@ -122,10 +122,12 @@ interface StationSession {
 
 /**
  * A {@link RtcCommandRouter.keepWarm} hold on one station: the keepalive timer sending
- * {@link PORTAL_KEEPALIVE} and whether its disposer has run.
+ * {@link PORTAL_KEEPALIVE}, the session `close` listener that ends it, and whether its disposer has run.
  */
 interface WarmHold {
   keepalive?: ReturnType<typeof setInterval>;
+  /** The session the hold watches, and the `close` listener on it the disposer removes. */
+  watch?: { session: RtcSession; onClose: () => void };
   disposed: boolean;
   dispose: () => void;
 }
@@ -445,8 +447,8 @@ export class RtcCommandRouter {
    * drops (a hangup, or the slot taken elsewhere) the keepalive stops and the hold clears, and the next
    * command or `keepWarm` opens a fresh session rather than reopening in a loop.
    *
-   * Answers an idempotent disposer that stops the keepalive and releases the hold, letting the idle-close
-   * resume.
+   * Answers an idempotent disposer that stops the keepalive, removes the hold's `close` listener from the
+   * session and releases the hold, letting the idle-close resume.
    */
   keepWarm(route: RtcRoute): () => void {
     const sn = route.stationSn;
@@ -460,6 +462,8 @@ export class RtcCommandRouter {
         if (this.warm.get(sn) === hold) this.warm.delete(sn);
         if (hold.keepalive) clearInterval(hold.keepalive);
         hold.keepalive = undefined;
+        if (hold.watch) hold.watch.session.off("close", hold.watch.onClose);
+        hold.watch = undefined;
         const st = this.sessions.get(sn);
         if (st?.warm) {
           st.warm = false;
@@ -498,11 +502,14 @@ export class RtcCommandRouter {
     }
     st.warm = true;
     this.touch(sn, st);
-    st.session.once("close", () => {
+    const onClose = (): void => {
       if (hold.keepalive) clearInterval(hold.keepalive);
       hold.keepalive = undefined;
+      hold.watch = undefined;
       if (this.warm.get(sn) === hold) this.warm.delete(sn);
-    });
+    };
+    hold.watch = { session: st.session, onClose };
+    st.session.once("close", onClose);
     hold.keepalive = setInterval(() => {
       if (!st.session.sendRaw(PORTAL_KEEPALIVE)) this.deps.logger?.warn?.(`[rtc] ${sn} warm keepalive not sent`);
     }, PORTAL_KEEPALIVE_MS);

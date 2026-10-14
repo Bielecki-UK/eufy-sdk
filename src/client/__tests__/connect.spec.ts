@@ -470,4 +470,16 @@ describe("EufyMega sessionExpired event", () => {
     await vi.waitFor(() => expect(deliver).toHaveBeenCalledWith("m0", { 8: 37 }));
     expect(fetchDps).toHaveBeenCalledWith("m0");
   });
+
+  it("registers a Tuya clean-line device under its serial when the record names no Tuya id", async () => {
+    const eufy = new EufyMega({ email: "t@example.com", password: "x" });
+    vi.spyOn((eufy as any).registry, "getDevices").mockResolvedValue([
+      { sn: "T2880P0000000000", category: "eufy_home_tuya", raw: {} },
+      { sn: "T2266P0000000000", category: "eufy_home_tuya", raw: { tuya_uuid: "tuya-dev-1" } },
+    ]);
+    const register = vi.spyOn((eufy as any).tuya, "registerDevice");
+    await eufy.getDevices();
+    expect(register).toHaveBeenCalledWith("T2880P0000000000", "T2880P0000000000");
+    expect(register).toHaveBeenCalledWith("T2266P0000000000", "tuya-dev-1");
+  });
 });

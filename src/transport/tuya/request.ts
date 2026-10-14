@@ -2,9 +2,10 @@
  * Tuya / Thingclips `api.json` request assembly + transport.
  *
  * Every call is a single `POST https://a1.tuyaeu.com/api.json` (EU) whose body is
- * **form-urlencoded plaintext params** (NOT an encrypted blob) plus a `sign`. This module builds
- * that param map for a given action, form-encodes it, POSTs it, and parses Tuya's response
- * envelope. The one non-plaintext piece — the `sign` digest — is delegated to a {@link TuyaSigner}.
+ * **form-urlencoded params** plus a `sign`. Under `et=3` the `postData` param is an AES-128-GCM blob
+ * and the reply `result` is encrypted the same way, with the same per-request key. This module builds
+ * that param map for a given action, form-encodes it, POSTs it, and parses Tuya's response envelope.
+ * The `sign` digest is delegated to a {@link TuyaSigner}.
  */
 /** Injectable POST transport — takes (url, form-body), returns the parsed JSON envelope. Native `fetch` by default. */
 export type TuyaHttpPost = (url: string, body: string) => Promise<unknown>;
@@ -54,7 +55,7 @@ export interface TuyaSession {
   chKey: string;
   /**
    * Per-login encryption code (`User.ecode`), read from the decrypted `login.reg` reply. Absent until
-   * login completes; it keys the et=3 reply decryption for every session call.
+   * login completes; it keys et=3 body encryption and reply decryption for every session call.
    */
   ecode?: string;
 }

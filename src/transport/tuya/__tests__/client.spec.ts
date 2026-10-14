@@ -1,14 +1,14 @@
 import { createCipheriv, generateKeyPairSync } from "node:crypto";
 import { TuyaClient, genDeviceId } from "../client.js";
 import { deriveBodyKey, decryptReply } from "../et3.js";
+import type { TuyaSigner } from "../sign.js";
+import type { TuyaHttpPost } from "../request.js";
 
 /** Decrypt the et=3-encrypted `postData` a request actually sent, keyed off its own `requestId`. */
 function sentPostData(body: URLSearchParams): unknown {
   const reqId = body.get("requestId")!;
   return JSON.parse(decryptReply(deriveBodyKey(reqId, null), body.get("postData")!));
 }
-import type { TuyaSigner } from "../sign.js";
-import type { TuyaHttpPost } from "../request.js";
 
 /** Generate a minimal RSA public key and return its modulus/exponent as decimal strings. */
 function makeTestRsaKey(): { n: string; e: string } {

@@ -6,7 +6,7 @@ import { deriveBodyKey, decryptReply, encryptBody } from "../et3.js";
 /**
  * Seal a plaintext the way the Tuya server does for an et=3 reply: AES-128-GCM with a random 12-byte
  * nonce, `nonce ‖ ciphertext ‖ tag`, base64. `gzip` wraps the plaintext in a gzip frame first. Test
- * helper only — the SDK never encrypts an et=3 body (requests are plaintext).
+ * helper only; it fixes the nonce so a sealed blob is reproducible.
  */
 function seal(key: Buffer, plaintext: string, opts: { gzip?: boolean } = {}): string {
   const body = opts.gzip ? gzipSync(Buffer.from(plaintext, "utf-8")) : Buffer.from(plaintext, "utf-8");

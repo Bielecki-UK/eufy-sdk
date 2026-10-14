@@ -1,9 +1,9 @@
 /**
- * Tuya `et=3` reply body crypto.
+ * Tuya `et=3` body crypto.
  *
- * An `et=3` `api.json` request is plaintext form params plus a `sign` — there is NO encrypted request
- * blob. The server encrypts only the **response**: the envelope's `result` arrives as a base64
- * AES-128-GCM blob instead of a JSON object. This module derives the per-reply key and opens that blob.
+ * `et=3` encrypts the request `postData` and the reply `result` with the same per-request key and the
+ * same layout: each is a base64 AES-128-GCM blob instead of a JSON string. This module derives that key,
+ * seals a request body and opens a reply.
  *
  * Blob layout: `nonce(12) ‖ ciphertext ‖ tag(16)`, no AAD, 12-byte GCM nonce, 16-byte tag. The
  * plaintext is gzip-compressed when it carries the gzip magic (`1f 8b`).
@@ -31,8 +31,7 @@ export function deriveBodyKey(requestId: string, ecode: string | null): Buffer {
 /**
  * Encrypt an `et=3` request `postData`: AES-128-GCM under a random 12-byte nonce, laid out
  * `nonce(12) ‖ ciphertext ‖ tag(16)` then base64 — the inverse of {@link decryptReply}, keyed by the
- * same {@link deriveBodyKey}. No AAD. The server rejects a plaintext `postData` sent under `et=3` with
- * `DECODE_ERROR`, so a body-bearing request must carry this blob, and the request is signed over it.
+ * same {@link deriveBodyKey}. No AAD. The request is signed over this blob.
  */
 export function encryptBody(key: Buffer, json: string): string {
   const nonce = randomBytes(12);

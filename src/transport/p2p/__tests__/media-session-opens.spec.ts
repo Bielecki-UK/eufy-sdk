@@ -25,11 +25,6 @@ class FakeSession extends EventEmitter {
   traceId = `trace-${built.length}`;
   opts: Record<string, unknown>;
   hasKey: boolean;
-  decodeVideoFrame(data: Buffer) {
-    return data.subarray(22);
-  }
-  startLiveMedia = vi.fn();
-  stopLiveMedia = vi.fn();
   constructor(opts: Record<string, unknown>) {
     super();
     this.opts = opts;
@@ -47,7 +42,6 @@ class FakeSession extends EventEmitter {
     return false;
   }
   async close() {
-    this.isConnected = false;
     this.emit("close");
   }
 }
@@ -226,7 +220,37 @@ describe("a second live camera on a claimed station session", () => {
     expect(keys).toContain(STATION_SN);
     expect(built).toHaveLength(2);
   });
-  it("keeps independent media delivering when the station-control connection closes, and closeAll still disposes both", async () => {
+  it("disposes a stopped station source after its ownership entry has been released", async () => {
+    const r = router();
+    const a = await openLive(r, CAM_A);
+    const consumer = a.attach() as EventEmitter;
+    const stopped = vi.fn();
+    consumer.on("stop", stopped);
+    consumer.on("error", () => {});
+    const stream = (a as unknown as { stream: EventEmitter }).stream;
+    try {
+      stream.emit("video", {
+        data: Buffer.from("000000016588", "hex"),
+        keyframe: true,
+        codec: "h264",
+        width: 640,
+        height: 480,
+        timestamp: 1,
+      });
+      stream.emit("error", new Error("upstream failed"));
+      expect(sessionKeys(r).has(`${STATION_SN}:0`)).toBe(false);
+      expect(sources(r).get(`${STATION_SN}:0`)).toBe(a);
+      expect(stopped).not.toHaveBeenCalled();
+
+      await built[0].close();
+
+      expect(sources(r).has(`${STATION_SN}:0`)).toBe(false);
+      expect(stopped).toHaveBeenCalledOnce();
+    } finally {
+      await r.closeAll();
+    }
+  });
+  it("keeps independent media delivering when the station-control connection closes", async () => {
     const r = router();
     const a = await openLive(r, CAM_A);
     a.attach();

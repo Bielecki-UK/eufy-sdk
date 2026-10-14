@@ -114,7 +114,7 @@ describe("TuyaClient", () => {
     expect(step1.get("a")).toBe("smartlife.m.user.username.token.get");
     expect(sentPostData(step1)).toEqual({
       countryCode: "44",
-      username: "eufyhome-12345",
+      username: "eh-12345",
       isUid: true,
     });
 
@@ -123,7 +123,7 @@ describe("TuyaClient", () => {
     expect(step2.get("a")).toBe("smartlife.m.user.uid.password.login.reg");
     const pd = sentPostData(step2) as Record<string, unknown>;
     expect(pd.token).toBe("TOK-1");
-    expect(pd.uid).toBe("eufyhome-12345");
+    expect(pd.uid).toBe("eh-12345");
     expect(pd.ifencrypt).toBe(1);
     // passwd = RSA-PKCS1-encrypt(MD5hex(aesPassword)) — non-deterministic, check shape only
     expect(pd.passwd).toMatch(/^[0-9a-f]+$/);

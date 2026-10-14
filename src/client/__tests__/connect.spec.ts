@@ -453,4 +453,21 @@ describe("EufyMega sessionExpired event", () => {
     expect(errors).toHaveLength(1);
     expect(errors[0]?.message).toBe("transient boom");
   });
+
+  it("reads a Tuya clean-line device's DPs from the cloud even when the broker refuses its subscribe", async () => {
+    const c = makeClient({ mqtt: 1, category: "eufy_home_tuya" });
+    c.eufy.on("error", () => {});
+    c.mqtt.mockResolvedValue({
+      subscribeDevice: vi.fn(async () => {
+        throw new Error("subscribe denied");
+      }),
+      disconnect: vi.fn(async () => {}),
+    });
+    const fetchDps = vi.spyOn((c.eufy as any).tuya, "fetchDps").mockResolvedValue({ 8: 37 });
+    const deliver = vi.spyOn((c.eufy as any).tuyaDpRouter, "deliver").mockImplementation(() => {});
+
+    await (c.eufy as any).ensureRealtime();
+    await vi.waitFor(() => expect(deliver).toHaveBeenCalledWith("m0", { 8: 37 }));
+    expect(fetchDps).toHaveBeenCalledWith("m0");
+  });
 });

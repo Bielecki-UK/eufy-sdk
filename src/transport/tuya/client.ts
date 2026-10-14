@@ -204,11 +204,12 @@ export class TuyaClient {
   }
 
   /**
-   * READ/dump a device's cached data-points (`smartlife.m.device.cache.dp.get`).
-   * Builds the request without needing a working signer; the signer is only exercised on send.
+   * READ a device's current data-points (`smartlife.m.device.dp.get`). The envelope's `result` is a
+   * flat `{ "<dpId>": value }` map. Builds the request without needing a working signer; the signer is
+   * only exercised on send.
    */
-  async getDeviceDps<T = unknown>(devId: string, dpCacheType?: number): Promise<TuyaEnvelope<T>> {
-    return this.call<T>(buildGetDeviceDpsAction(devId, dpCacheType));
+  async getDeviceDps<T = unknown>(devId: string): Promise<TuyaEnvelope<T>> {
+    return this.call<T>(buildGetDeviceDpsAction(devId));
   }
 
   /**

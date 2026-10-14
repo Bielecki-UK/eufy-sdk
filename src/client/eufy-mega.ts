@@ -1870,24 +1870,26 @@ export class EufyMega extends EventEmitter {
   /**
    * Subscribe the devices on one credential scope; a failing subscribe is reported, not fatal (one
    * unreachable device must not stop the rest of the roster from coming up).
+   *
+   * A Tuya clean-line device's DPs are also read from the Tuya cloud, whether or not its subscribe
+   * succeeded: the cloud read is a separate plane, and the broker can refuse a subscribe for a device
+   * whose DPs the Tuya cloud still serves.
    */
   private async subscribeMqttDevices(scope: MqttScope, transport: SecureMqtt): Promise<void> {
     for (const d of this.getMqttDevices().filter((dev) => mqttScopeFor(dev) === scope)) {
       try {
         await transport.subscribeDevice(d);
         await this.sendRealtimeInit(d.sn);
-        // For Tuya clean-line devices, poll cached DPs immediately after subscribe so the
-        // capability getters have state before the first realtime push arrives.
-        if (d.category === "eufy_home_tuya") {
-          this.tuya
-            .fetchDps(d.sn)
-            .then((dps) => {
-              if (dps) this.tuyaDpRouter.deliver(d.sn, dps);
-            })
-            .catch((e) => this.reportError(e));
-        }
       } catch (e) {
         this.reportError(e);
+      }
+      if (d.category === "eufy_home_tuya") {
+        this.tuya
+          .fetchDps(d.sn)
+          .then((dps) => {
+            if (dps) this.tuyaDpRouter.deliver(d.sn, dps);
+          })
+          .catch((e) => this.reportError(e));
       }
     }
   }

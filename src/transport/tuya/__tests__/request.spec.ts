@@ -124,6 +124,7 @@ describe("dp action builders", () => {
       token: "TOK",
       ifencrypt: 1,
       createGroup: true,
+      options: '{"group": 1}',
     });
   });
 });

@@ -53,11 +53,12 @@ describe("decodeImageV2 with the chroma tables in the encrypted prefix", () => {
   it("reconstructs a decodable JPEG at the original geometry from a tail that starts at DRI", () => {
     const out = decodeImageV2(driBlob(garbage(600, 1)));
     expect(out).not.toBeNull();
+    expect(out!.includes(Buffer.concat([DRI_ZERO, SOS]))).toBe(true);
     const image = jpegDecode(out!, { useTArray: true });
     expect({ width: image.width, height: image.height }).toEqual({ width: WIDTH, height: HEIGHT });
   });
 
-  it("takes only a full DRI + SOS shape as the plaintext start", () => {
+  it("cuts at the last 3-component SOS, ignoring DRI/SOS decoys in the encrypted prefix", () => {
     const decoy = Buffer.concat([
       garbage(200, 2),
       Buffer.from([0xff, 0xdd]),

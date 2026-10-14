@@ -57,7 +57,10 @@ import { decode as jpegDecode } from "jpeg-js";
 /** The `v2_eufysecurity:` wrapper prefix (including the trailing colon) that tags a v2 blob. */
 const V2_PREFIX = "v2_eufysecurity:";
 
-/** The standard baseline DC-chrominance Huffman marker — the first plaintext byte of a v2 tail that keeps its chroma DHTs. */
+/**
+ * The standard baseline DC-chrominance Huffman marker — the first plaintext byte of a v2 tail that keeps
+ * its chroma DHTs.
+ */
 const DC_CHROMA = Buffer.from([0xff, 0xc4, 0x00, 0x1f, 0x01]);
 
 /**
@@ -382,8 +385,8 @@ function findScanCut(data: Buffer): number {
  * plaintext start.
  *
  * A blob cut at the DC-chroma DHT carries those tables itself and its tail is returned as it is. A blob
- * cut at the SOS (or a DRI right before it) lost them with the encrypted prefix; the standard Annex-K chroma DHTs are prepended,
- * which yields the same shape of tail.
+ * cut at the SOS (or a DRI right before it) lost them with the encrypted prefix; the standard Annex-K
+ * chroma DHTs are prepended, which yields the same shape of tail.
  */
 function plaintextTail(data: Buffer): Buffer | null {
   const cut = data.indexOf(DC_CHROMA);
@@ -401,8 +404,8 @@ export function isV2Image(data: Buffer): boolean {
 /**
  * Decode a v2 blob to a plain JPEG buffer by reconstructing its header, or null if it isn't v2, the
  * plaintext scan can't be located, or no frame shape explains it. The plaintext tail starts either at
- * the DC-chroma DHT or at the SOS, with or without a DRI segment in front; the second form gets the standard chroma
- * DHTs in front of it (see `plaintextTail`).
+ * the DC-chroma DHT or at the SOS, with or without a DRI segment in front; the second form gets the
+ * standard chroma DHTs in front of it (see `plaintextTail`).
  *
  * Three steps and no pixel rewrite: the frame shape is read out of the entropy scan,
  * one probe decode both proves the spliced JPEG decodes and measures how far the substitute quant

@@ -261,6 +261,7 @@ export function buildUsernameTokenGetAction(countryCode: string, username: strin
  * LOGIN step 2: uid password login + auto-register.
  * Wire-confirmed from the eufy Security app: wire action
  * `smartlife.m.user.uid.password.login.reg`, v=1.0. `passwd` = hex of RSA-PKCS1-encrypt(MD5hex(aesPassword)).
+ * `options` is the JSON string `{"group": 1}`, as the app sends it.
  * On success returns `{ sid, uid }`.
  */
 export function buildPasswordLoginRegAction(
@@ -272,7 +273,15 @@ export function buildPasswordLoginRegAction(
   return {
     a: "smartlife.m.user.uid.password.login.reg",
     v: "1.0",
-    postData: JSON.stringify({ countryCode, uid, passwd, token, ifencrypt: 1, createGroup: true }),
+    postData: JSON.stringify({
+      countryCode,
+      uid,
+      passwd,
+      token,
+      ifencrypt: 1,
+      createGroup: true,
+      options: '{"group": 1}',
+    }),
   };
 }
 

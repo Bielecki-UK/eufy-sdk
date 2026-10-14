@@ -15,43 +15,24 @@ import type { CapabilityModule } from "./types.js";
  * @internal
  */
 export const MOWER_DP = {
-  /** `battery_percentage` — Value ro, 0-100 %. */
   BATTERY: 8,
-  /** `volume_set` — Value rw, 0-100 %. */
   VOLUME: 26,
-  /** `child_lock` — Bool rw. */
   CHILD_LOCK: 47,
-  /** `rain_auto_return` — Bool rw: return to the station when rain is detected. */
   RAIN_AUTO_RETURN: 101,
-  /** `wifi_signal_strength` — Value ro, 0-100 %. */
   WIFI_SIGNAL: 109,
-  /** `mow_height` — Value rw, 25-75 mm. */
   MOW_HEIGHT: 110,
-  /** `save_map_process` — Value ro, 0-100 %. */
   SAVE_MAP_PROGRESS: 118,
-  /** `base_station_used_time` — Value rw, minutes. */
   STATION_USED_TIME: 125,
-  /** `mow_blade_used_time` — Value rw, minutes. */
   BLADE_USED_TIME: 126,
-  /** `edge_trim` — Bool rw. */
   EDGE_TRIM: 128,
-  /** `enable_work_angle` — Bool rw. */
   WORK_ANGLE_ENABLED: 130,
-  /** `work_angle` — Value rw, -90-90 degrees. */
   WORK_ANGLE: 131,
-  /** `enable_smart_forbid_zone` — Bool rw. */
   SMART_NO_GO_ZONES: 132,
-  /** `enable_bird_view_capture` — Bool rw. */
   BIRD_VIEW_CAPTURE: 133,
-  /** `net_media_type` — Enum ro: `None` / `Wifi` / `Cellular`. */
   NETWORK: 134,
-  /** `enable_cellular` — Bool rw. */
   CELLULAR_ENABLED: 137,
-  /** `follow_edge_distance` — Value rw, -10000-10000 mm. */
   EDGE_DISTANCE: 139,
-  /** `gps_location_check` — Bool rw, the schema's "GPS anti-theft switch". */
   GPS_ANTI_THEFT: 140,
-  /** `sparse_lawn_optimization` — Bool rw. */
   SPARSE_LAWN_OPTIMIZATION: 141,
 } as const;
 
@@ -265,7 +246,11 @@ export const MOWER: CapabilityModule = {
   description: "Robot-mower state: battery, cutting height, settings and wear timers (read-only).",
   members: MOWER_MEMBERS,
   properties: propertiesOf(MOWER_MEMBERS),
-  detection: { codecs: ["mower"] },
+  /**
+   * The T2880 (E15) only: its Tuya product schema and a live report are the evidence for every member.
+   * The E18 and C15 share the `mower` codec but neither has a schema or a report in hand.
+   */
+  detection: { detect: (record, codec) => codec === "mower" && record.model === "T2880" },
   decodeState(signal) {
     const params = pickDpParams(signal.source === "mqtt" ? signal.dpParams : undefined, MOWER_DP_IDS);
     return params ? { params } : null;

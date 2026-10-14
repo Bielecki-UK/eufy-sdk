@@ -229,7 +229,7 @@ See [Devices & capabilities](/devices) for how capability resolution works, and 
 
 ## Mowers
 
-A robot mower (E15, E18, C15) carries the `mower` capability. It is **read-only**: no write has been
+The E15 robot mower (T2880) carries the `mower` capability. It is **read-only**: no write has been
 captured against a mower, so it exposes no setter.
 
 ```ts

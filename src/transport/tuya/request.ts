@@ -31,7 +31,10 @@ export const TUYA_APP_VERSION = "6.0.51_26722";
 
 /** A single action to call: the `a` (action) + `v` (version) + optional pre-serialized `postData`. */
 export interface TuyaAction {
-  /** Action name, e.g. `thing.m.device.dp.publish`. */
+  /**
+   * Action name as it goes on the wire, e.g. `smartlife.m.device.dp.publish`. The vendor SDK names
+   * its actions `thing.*` and rewrites a leading `thing` to `smartlife` before sending.
+   */
   a: string;
   /** Per-action version, e.g. `"1.0"` / `"2.0"`. */
   v: string;
@@ -209,23 +212,23 @@ export async function sendApiRequest<T = unknown>(
 
 /**
  * CONTROL: publish device data-points. `dps` is `{ "<dpId>": <value> }`; note it is JSON-stringified
- * INSIDE the postData (Tuya nests the dps map as a string). Action `thing.m.device.dp.publish` v2.0.
+ * INSIDE the postData (Tuya nests the dps map as a string). Action `smartlife.m.device.dp.publish` v2.0.
  */
 export function buildPublishDpsAction(devId: string, gwId: string, dps: Record<string, unknown>): TuyaAction {
   return {
-    a: "thing.m.device.dp.publish",
+    a: "smartlife.m.device.dp.publish",
     v: "2.0",
     postData: JSON.stringify({ gwId, devId, dps: JSON.stringify(dps) }),
   };
 }
 
 /**
- * READ/dump: fetch a device's cached data-points. Action `thing.m.device.cache.dp.get` v2.0.
+ * READ/dump: fetch a device's cached data-points. Action `smartlife.m.device.cache.dp.get` v2.0.
  * TODO(verify): `dpCacheType` default (1) was not pinned from the capture.
  */
 export function buildGetDeviceDpsAction(devId: string, dpCacheType = 1): TuyaAction {
   return {
-    a: "thing.m.device.cache.dp.get",
+    a: "smartlife.m.device.cache.dp.get",
     v: "2.0",
     postData: JSON.stringify({ devId, dpCacheType }),
   };

@@ -85,9 +85,9 @@ describe("buildApiParams", () => {
 });
 
 describe("dp action builders", () => {
-  it("publishDps: thing.m.device.dp.publish v2.0 with nested stringified dps", () => {
+  it("publishDps: smartlife.m.device.dp.publish v2.0 with nested stringified dps", () => {
     const action = buildPublishDpsAction("dev-1", "gw-1", { "101": true, "102": 50 });
-    expect(action.a).toBe("thing.m.device.dp.publish");
+    expect(action.a).toBe("smartlife.m.device.dp.publish");
     expect(action.v).toBe("2.0");
     expect(JSON.parse(action.postData!)).toEqual({
       gwId: "gw-1",
@@ -96,9 +96,9 @@ describe("dp action builders", () => {
     });
   });
 
-  it("getDeviceDps: thing.m.device.cache.dp.get v2.0", () => {
+  it("getDeviceDps: smartlife.m.device.cache.dp.get v2.0", () => {
     const action = buildGetDeviceDpsAction("dev-1", 1);
-    expect(action.a).toBe("thing.m.device.cache.dp.get");
+    expect(action.a).toBe("smartlife.m.device.cache.dp.get");
     expect(action.v).toBe("2.0");
     expect(JSON.parse(action.postData!)).toEqual({ devId: "dev-1", dpCacheType: 1 });
   });

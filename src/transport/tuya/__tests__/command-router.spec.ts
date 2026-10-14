@@ -48,7 +48,7 @@ describe("TuyaCommandRouter", () => {
     expect(router.loginOnce).toBeNull();
 
     // Second dispatch: login succeeds on the retry. publishDps may still fail (the stub doesn't handle
-    // thing.m.device.dp.publish) — but the error must NOT be the stale TRANSIENT_FAILURE, proving
+    // smartlife.m.device.dp.publish) — but the error must NOT be the stale TRANSIENT_FAILURE, proving
     // the login was retried rather than the rejected promise reused.
     const secondErr = await router.dispatchCommand("sn-1", cmd).catch((err: Error) => err.message);
     // second dispatch must not re-throw the stale TRANSIENT_FAILURE (it either succeeds or fails differently)

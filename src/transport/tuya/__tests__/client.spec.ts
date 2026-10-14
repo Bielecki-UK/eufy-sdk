@@ -72,7 +72,7 @@ describe("TuyaClient", () => {
     const res = await c.getDeviceDps("dev-1");
     expect(res.success).toBe(true);
     const body = new URLSearchParams(calls[0].body);
-    expect(body.get("a")).toBe("thing.m.device.cache.dp.get");
+    expect(body.get("a")).toBe("smartlife.m.device.cache.dp.get");
     expect(sentPostData(body)).toEqual({ devId: "dev-1", dpCacheType: 1 });
   });
 
@@ -88,7 +88,7 @@ describe("TuyaClient", () => {
     const c = new TuyaClient({ signer: new FixedSigner(), chKey: "7cbfe6d8", http });
     await c.publishDps("dev-1", "gw-1", { "101": true }, { allowUnverified: true });
     const body = new URLSearchParams(calls[0].body);
-    expect(body.get("a")).toBe("thing.m.device.dp.publish");
+    expect(body.get("a")).toBe("smartlife.m.device.dp.publish");
     expect(sentPostData(body)).toEqual({
       gwId: "gw-1",
       devId: "dev-1",

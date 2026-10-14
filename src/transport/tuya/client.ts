@@ -204,7 +204,7 @@ export class TuyaClient {
   }
 
   /**
-   * READ/dump a device's cached data-points (`thing.m.device.cache.dp.get`).
+   * READ/dump a device's cached data-points (`smartlife.m.device.cache.dp.get`).
    * Builds the request without needing a working signer; the signer is only exercised on send.
    */
   async getDeviceDps<T = unknown>(devId: string, dpCacheType?: number): Promise<TuyaEnvelope<T>> {
@@ -212,7 +212,7 @@ export class TuyaClient {
   }
 
   /**
-   * CONTROL: publish data-points to a device (`thing.m.device.dp.publish`). `dps` is
+   * CONTROL: publish data-points to a device (`smartlife.m.device.dp.publish`). `dps` is
    * `{ "<dpId>": <value> }`. `gwId` is the gateway/parent id (equals `devId` for a standalone gw).
    *
    * ⚠️ UNVERIFIED write — refuses to send by default. The `dp.publish` param shape

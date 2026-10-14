@@ -82,7 +82,7 @@ describe("buildApiParams", () => {
     expect(params.postData).not.toBe(action.postData);
     expect(JSON.parse(decryptReply(deriveBodyKey("r", null), params.postData))).toEqual(JSON.parse(action.postData!));
     // preimage never contains the raw postData json (the encrypted blob is swapMd5-folded)
-    expect(signer.lastPreimage).not.toContain("dpCacheType");
+    expect(signer.lastPreimage).not.toContain("dev-1");
     expect(signer.lastPreimage).toContain("postData=");
   });
 });
@@ -99,11 +99,11 @@ describe("dp action builders", () => {
     });
   });
 
-  it("getDeviceDps: smartlife.m.device.cache.dp.get v2.0", () => {
-    const action = buildGetDeviceDpsAction("dev-1", 1);
-    expect(action.a).toBe("smartlife.m.device.cache.dp.get");
-    expect(action.v).toBe("2.0");
-    expect(JSON.parse(action.postData!)).toEqual({ devId: "dev-1", dpCacheType: 1 });
+  it("getDeviceDps: smartlife.m.device.dp.get v1.0", () => {
+    const action = buildGetDeviceDpsAction("dev-1");
+    expect(action.a).toBe("smartlife.m.device.dp.get");
+    expect(action.v).toBe("1.0");
+    expect(JSON.parse(action.postData!)).toEqual({ devId: "dev-1" });
   });
 
   it("login action builders shape their postData", () => {

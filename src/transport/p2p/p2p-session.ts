@@ -2116,7 +2116,7 @@ export class P2PSession extends EventEmitter {
 
     if (pending?.header) {
       const taken = Math.min(pending.header.bytesToRead - pending.byteLength, body.length);
-      if (taken) pending.chunks.push(body.subarray(0, taken));
+      pending.chunks.push(body.subarray(0, taken));
       pending.byteLength += taken;
       body = body.subarray(taken);
       if (pending.byteLength < pending.header.bytesToRead) {

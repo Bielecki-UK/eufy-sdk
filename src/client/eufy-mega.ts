@@ -1240,8 +1240,9 @@ export class EufyMega extends EventEmitter {
    *
    * Side-effect: registers `eufy_home_tuya` devices with the Tuya command router so
    * the command dispatcher can resolve a eufy SN → Tuya devId without a separate lookup.
-   * The Tuya id is extracted from the device's raw cloud record (`tuya_uuid`, `tuya_virtual_id`,
-   * `tuya_device_id`, or `virtualId` fields — whichever is non-empty).
+   * The Tuya id is the first non-empty `tuya_uuid`, `tuya_virtual_id`, `tuya_device_id` or
+   * `virtualId` on the raw cloud record, else the device's serial: the app keys its Tuya device by
+   * the eufy device id, and a record that carries none of those fields is read under its serial.
    *
    * A partial cloud outage still resolves, with the devices that answered plus the ones already known — but a
    * session the cloud has rejected REJECTS, with {@link SessionExpiredError}. An empty list would be
@@ -1252,8 +1253,7 @@ export class EufyMega extends EventEmitter {
     for (const dev of devices) {
       if (dev.category !== "eufy_home_tuya") continue;
       const raw = (dev.raw ?? {}) as Record<string, unknown>;
-      const devId = tuyaDevIdFrom(raw);
-      if (devId) this.tuya.registerDevice(dev.sn, devId);
+      this.tuya.registerDevice(dev.sn, tuyaDevIdFrom(raw) ?? dev.sn);
     }
     return devices;
   }

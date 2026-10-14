@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { EufyMega } from "../eufy-mega.js";
 import { Device } from "../../model/device.js";
+import { decodeEvent } from "../../model/capabilities/index.js";
 
 const SN = "T8530P0000000000";
 const HUB = "T8030P0000000000";
@@ -57,7 +58,7 @@ const frame = (payload: unknown, channel = 7) => ({
 });
 
 describe("video lock status integration", () => {
-  it("lands in registry and a held device before emitting property and semantic events", async () => {
+  it("lands in registry and a held device before emitting property changes", async () => {
     const { client, internal, dev } = harness();
     const properties: unknown[] = [];
     const semantic: unknown[] = [];
@@ -74,11 +75,25 @@ describe("video lock status integration", () => {
     expect(dev.lock?.()?.battery).toBe(66);
     expect(internal.registry.dpParams.get(SN)).toEqual({ 6000: "4", 6001: "66" });
     expect(properties).toContainEqual({ deviceSn: SN, property: "locked", value: true });
-    expect(semantic).toEqual([{ deviceSn: SN, stationSn: HUB, locked: true }]);
+    expect(semantic).toEqual([]);
     internal.onP2PFrame(HUB, frame({ code: 0, slState: 4 }));
-    expect(semantic).toHaveLength(1);
+    expect(semantic).toEqual([]);
     const fetched = await client.getDevice(SN);
     expect(fetched.lock?.()?.locked).toBe(true);
+  });
+  it("announces consecutive same-state lock pushes for another lock family", () => {
+    const { client, internal } = harness();
+    const seen: unknown[] = [];
+    client.on("lockState", (event) => seen.push(event));
+    for (const eventType of [263, 265]) {
+      const signal = { source: "push" as const, eventType, deviceSn: "T8531P0000000000", payload: {} };
+      for (const event of decodeEvent(signal, new Set(["lock"])))
+        internal.emitSemantic(event.event, event.payload, { edge: true, refresh: event.refresh });
+    }
+    expect(seen).toEqual([
+      { deviceSn: "T8531P0000000000", eventType: 263, locked: true },
+      { deviceSn: "T8531P0000000000", eventType: 265, locked: true },
+    ]);
   });
   it("keeps the last settled state when an unknown native report arrives", () => {
     const { internal, dev } = harness();
@@ -104,7 +119,7 @@ describe("video lock status integration", () => {
     expect(ctx).toMatchObject({
       adminUserId: "device-admin",
       shortUserId: "0002",
-      stationModel: "T8030",
+      stationSerial: HUB,
       timezone: "reported-vendor-zone",
     });
     expect(ctx.accountName).toBe("test");

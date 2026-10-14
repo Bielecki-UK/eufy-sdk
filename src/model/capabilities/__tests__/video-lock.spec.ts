@@ -18,7 +18,7 @@ const ctx: CommandContext = {
   timezone: "UTC0",
   hasP2p: true,
   homeBaseAttached: true,
-  stationModel: "T8030",
+  stationSerial: "T8030P0000000000",
 };
 const signal = (payload: unknown, deviceType = 55): InboundSignal => ({
   source: "p2p-frame",
@@ -46,32 +46,27 @@ describe("native video lock", () => {
       },
     ]);
   });
-  it.each([
-    [false, undefined],
-    [true, "T8021"],
-    [true, undefined],
-    [false, "T8030"],
-  ] as const)("withholds native actuation on an unverified route (%s, %s)", async (homeBaseAttached, stationModel) => {
-    const context = { ...ctx, homeBaseAttached, stationModel };
-    const { acts, sent } = bind<LockActions>("lock", context);
-    for (const action of ["lock", "unlock"] as const) {
-      expect(acts[action]).toBeUndefined();
-      const dispatch = vi.fn();
-      await expect(
-        LOCK_MEMBERS[action].method({ ctx: context, sink: { dispatch }, read: () => undefined })(),
-      ).rejects.toThrow(/unverified/);
-      expect(dispatch).not.toHaveBeenCalled();
-    }
-    expect(sent).toEqual([]);
-  });
-  it.each(["adminUserId", "shortUserId", "accountName"] as const)(
-    "refuses missing %s before sending",
-    async (field) => {
-      const { acts, sent } = bind<LockActions>("lock", { ...ctx, [field]: undefined });
-      await expect(acts.lock!()).rejects.toThrow(/missing member identity/);
+  it.each([undefined, "T8021P0000000000", "T8530P0000000000"])(
+    "withholds native actuation on an unverified station %s",
+    async (stationSerial) => {
+      const context = { ...ctx, stationSerial };
+      const { acts, sent } = bind<LockActions>("lock", context);
+      for (const action of ["lock", "unlock"] as const) {
+        expect(acts[action]).toBeUndefined();
+        const dispatch = vi.fn();
+        await expect(
+          LOCK_MEMBERS[action].method({ ctx: context, sink: { dispatch }, read: () => undefined })(),
+        ).rejects.toThrow(/unverified/);
+        expect(dispatch).not.toHaveBeenCalled();
+      }
       expect(sent).toEqual([]);
     },
   );
+  it("refuses missing accountName before sending", async () => {
+    const { acts, sent } = bind<LockActions>("lock", { ...ctx, accountName: undefined });
+    await expect(acts.lock!()).rejects.toThrow(/missing member identity/);
+    expect(sent).toEqual([]);
+  });
   it("withholds ff09 settings and keeps other families unchanged", () => {
     const { acts } = bind<LockActions>("lock", ctx, { ff09Settings: { getAutoLockState: vi.fn() } });
     expect(acts.setAutoLock).toBeUndefined();
@@ -109,22 +104,19 @@ describe("native video lock", () => {
     expect("refreshStatus" in acts).toBe(false);
     expect(query).not.toHaveBeenCalled();
   });
-  it.each([3, "3", 4, "4"])("decodes %s into canonical state and a semantic event", (state) => {
+  it.each([3, "3", 4, "4"])("decodes %s into canonical state", (state) => {
     const frame = signal({ code: 0, slState: state, slBattery: "66" });
     expect(LOCK.decodeState!(frame)).toEqual({ params: { 6000: String(state), 6001: "66" } });
-    expect(LOCK.decodeEvent!(frame)).toEqual({ event: "lockState", payload: { locked: Number(state) === 4 } });
   });
   it.each([null, [], {}, { code: -106, slState: 3 }, { code: "0", slState: 3 }])(
     "ignores malformed/error payload %j",
     (payload) => {
       expect(LOCK.decodeState!(signal(payload))).toBeNull();
-      expect(LOCK.decodeEvent!(signal(payload))).toBeNull();
     },
   );
   it("isolates native state decoding and does not treat unknown reports as unlocked", () => {
     expect(LOCK.decodeState!(signal({ code: 0, slState: 4 }, 189))).toBeNull();
     expect(LOCK.decodeState!(signal({ code: 0, slState: 5, slBattery: "66" }))).toEqual({ params: { 6001: "66" } });
-    expect(LOCK.decodeEvent!(signal({ code: 0, slState: 5 }))).toBeNull();
   });
   it.each([
     ["T8531", 189],

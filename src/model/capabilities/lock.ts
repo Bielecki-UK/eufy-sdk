@@ -112,7 +112,7 @@ const overP2p = (ctx: AvailabilityContext): boolean => ctx.hasP2p === true && !i
 
 /** Native actuation is verified only on the HomeBase 3 route; other lock families retain their controls. */
 function actuationAvailable(ctx: CommandContext): boolean {
-  return !isVideoSmartLock(ctx) || (ctx.homeBaseAttached === true && ctx.stationModel === "T8030");
+  return !isVideoSmartLock(ctx) || ctx.stationSerial?.startsWith("T8030") === true;
 }
 
 /** Live status read; unknown states remain unknown and device refusals reject. */
@@ -438,12 +438,6 @@ export const LOCK: CapabilityModule = {
     if (report.slBattery !== undefined) params[6001] = String(report.slBattery);
     return { params };
   },
-  decodeEvent(signal) {
-    const report = nativeReport(signal);
-    const locked = report && nativeState(report.slState);
-    return locked === undefined ? null : { event: "lockState", payload: { locked } };
-  },
-  stateEvents: [{ event: "lockState", field: "locked" }],
   // Lock state is reported via param 6000 (verified: 4=locked, 3=unlocked); the model name (lock/safe) is a
   // signal, and every lock-codec device has the lock capability as its baseline.
   detection: { evidenceParams: [6000], modelHints: [/lock/i, /safe/i], codecs: ["lock"] },

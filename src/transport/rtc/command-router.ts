@@ -122,12 +122,15 @@ interface StationSession {
 
 /**
  * A {@link RtcCommandRouter.keepWarm} hold on one station: the keepalive timer sending
- * {@link PORTAL_KEEPALIVE}, the session `close` listener that ends it, and whether its disposer has run.
+ * {@link PORTAL_KEEPALIVE}, the session listeners that end it and record the hub's echo, whether the
+ * last keepalive sent is still unechoed, and whether its disposer has run.
  */
 interface WarmHold {
   keepalive?: ReturnType<typeof setInterval>;
-  /** The session the hold watches, and the `close` listener on it the disposer removes. */
-  watch?: { session: RtcSession; onClose: () => void };
+  /** The session the hold watches, and its `close` and `keepaliveEcho` listeners the disposer removes. */
+  watch?: { session: RtcSession; onClose: () => void; onEcho: () => void };
+  /** A keepalive went out and the hub has not echoed it since. */
+  awaitingEcho: boolean;
   disposed: boolean;
   dispose: () => void;
 }
@@ -443,27 +446,28 @@ export class RtcCommandRouter {
    * Opens or reuses the station session, suppresses its idle-close ({@link IDLE_CLOSE_MS}) for the life
    * of the hold, and sends {@link PORTAL_KEEPALIVE} on it every {@link PORTAL_KEEPALIVE_MS}. One hold per
    * station: a second call for the same station answers the first call's disposer and arms no second
-   * timer. The hub grants one RTC session per account, so the hold keeps that one slot; when the session
-   * drops (a hangup, or the slot taken elsewhere) the keepalive stops and the hold clears, and the next
+   * timer. The hub grants one RTC session per account, so the hold keeps that one slot. The hub echoes
+   * each keepalive; a tick that finds the previous keepalive unechoed drops the session. When the session
+   * closes (that drop, or the slot taken elsewhere) the keepalive stops and the hold clears, and the next
    * command or `keepWarm` opens a fresh session rather than reopening in a loop.
    *
-   * Answers an idempotent disposer that stops the keepalive, removes the hold's `close` listener from the
-   * session and releases the hold, letting the idle-close resume.
+   * Answers an idempotent disposer that stops the keepalive, removes the hold's listeners from the
+   * session and releases the hold, letting the idle-close resume. Throws when no account is logged in.
    */
   keepWarm(route: RtcRoute): () => void {
     const sn = route.stationSn;
     const existing = this.warm.get(sn);
     if (existing) return existing.dispose;
+    const identity = this.deps.identity();
+    if (!identity) throw new Error(`rtc: not logged in, cannot warm ${sn}`);
     const hold: WarmHold = {
+      awaitingEcho: false,
       disposed: false,
       dispose: () => {
         if (hold.disposed) return;
         hold.disposed = true;
         if (this.warm.get(sn) === hold) this.warm.delete(sn);
-        if (hold.keepalive) clearInterval(hold.keepalive);
-        hold.keepalive = undefined;
-        if (hold.watch) hold.watch.session.off("close", hold.watch.onClose);
-        hold.watch = undefined;
+        this.unwatch(hold);
         const st = this.sessions.get(sn);
         if (st?.warm) {
           st.warm = false;
@@ -472,21 +476,18 @@ export class RtcCommandRouter {
       },
     };
     this.warm.set(sn, hold);
-    void this.warmUp(sn, route, hold);
+    void this.warmUp(sn, route, identity, hold);
     return hold.dispose;
   }
 
   /**
    * Bring a station session up for a {@link keepWarm} hold and start its keepalive. A bring-up that fails,
-   * or a hold disposed before it completes, clears the hold and arms no timer. The keepalive stops when
-   * the session closes, which also clears the hold so the next command or `keepWarm` rebuilds cleanly.
+   * or a hold disposed before it completes, clears the hold and arms no timer. Each tick first checks
+   * that the hub echoed the previous keepalive, and drops the session when it did not. The keepalive
+   * stops when the session closes, which also clears the hold so the next command or `keepWarm`
+   * rebuilds cleanly.
    */
-  private async warmUp(sn: string, route: RtcRoute, hold: WarmHold): Promise<void> {
-    const identity = this.deps.identity();
-    if (!identity) {
-      if (this.warm.get(sn) === hold) this.warm.delete(sn);
-      return;
-    }
+  private async warmUp(sn: string, route: RtcRoute, identity: RtcIdentity, hold: WarmHold): Promise<void> {
     const adminUserId = route.adminUserId || identity.userId;
     let st: StationSession;
     try {
@@ -503,17 +504,36 @@ export class RtcCommandRouter {
     st.warm = true;
     this.touch(sn, st);
     const onClose = (): void => {
-      if (hold.keepalive) clearInterval(hold.keepalive);
-      hold.keepalive = undefined;
-      hold.watch = undefined;
+      this.unwatch(hold);
       if (this.warm.get(sn) === hold) this.warm.delete(sn);
     };
-    hold.watch = { session: st.session, onClose };
+    const onEcho = (): void => {
+      hold.awaitingEcho = false;
+    };
+    hold.watch = { session: st.session, onClose, onEcho };
     st.session.once("close", onClose);
+    st.session.on("keepaliveEcho", onEcho);
     hold.keepalive = setInterval(() => {
-      if (!st.session.sendRaw(PORTAL_KEEPALIVE)) this.deps.logger?.warn?.(`[rtc] ${sn} warm keepalive not sent`);
+      if (hold.awaitingEcho) {
+        this.deps.logger?.warn?.(`[rtc] ${sn} warm keepalive went unechoed, dropping the session`);
+        this.drop(sn, st);
+        return;
+      }
+      if (st.session.sendRaw(PORTAL_KEEPALIVE)) hold.awaitingEcho = true;
+      else this.deps.logger?.warn?.(`[rtc] ${sn} warm keepalive not sent`);
     }, PORTAL_KEEPALIVE_MS);
     hold.keepalive.unref?.();
+  }
+
+  /** Stop a hold's keepalive and remove its listeners from the session it watches. */
+  private unwatch(hold: WarmHold): void {
+    if (hold.keepalive) clearInterval(hold.keepalive);
+    hold.keepalive = undefined;
+    if (hold.watch) {
+      hold.watch.session.off("close", hold.watch.onClose);
+      hold.watch.session.off("keepaliveEcho", hold.watch.onEcho);
+    }
+    hold.watch = undefined;
   }
 
   private touch(sn: string, st: StationSession): void {

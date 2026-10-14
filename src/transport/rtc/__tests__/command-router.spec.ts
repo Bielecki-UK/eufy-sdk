@@ -35,6 +35,8 @@ class FakeSession extends EventEmitter {
   closed = false;
   sent: Buffer[] = [];
   raw: Buffer[] = [];
+  /** Whether a raw keepalive is echoed back as the hub does (default) or goes unanswered. */
+  echoKeepalive = true;
   /** What to do with a sent packet: "ack" (default), "nack" (errCode 1), "silent", or "close". */
   behaviour: "ack" | "nack" | "silent" | "close" = "ack";
   /** How connect() behaves: come up (default), throw, or never answer. */
@@ -67,6 +69,7 @@ class FakeSession extends EventEmitter {
   }
   sendRaw(bytes: Buffer): boolean {
     this.raw.push(bytes);
+    if (this.isConnected && this.echoKeepalive) queueMicrotask(() => this.emit("keepaliveEcho"));
     return this.isConnected;
   }
   sendCommand(pkt: Buffer): boolean {
@@ -775,6 +778,66 @@ describe("RtcCommandRouter keepWarm", () => {
         expect(s.raw).toEqual([PORTAL_KEEPALIVE]);
       } finally {
         FakeSession.connectMode = "up";
+        router.close();
+      }
+    }));
+
+  it("keeps the session while each keepalive is echoed, and drops it on the tick after one goes unechoed", () =>
+    onWarmTimers(async () => {
+      const warn = vi.fn();
+      const { router, sessions } = makeRouter({ logger: { debug: vi.fn(), info: vi.fn(), warn, error: vi.fn() } });
+      try {
+        router.keepWarm(ST);
+        await settle();
+        const s = sessions[0]!;
+        await vi.advanceTimersByTimeAsync(PORTAL_KEEPALIVE_MS * 3);
+        expect(s.raw).toHaveLength(3);
+        expect(s.closed).toBe(false);
+        s.echoKeepalive = false;
+        await vi.advanceTimersByTimeAsync(PORTAL_KEEPALIVE_MS);
+        expect(s.raw).toHaveLength(4);
+        expect(s.closed).toBe(false);
+        await vi.advanceTimersByTimeAsync(PORTAL_KEEPALIVE_MS);
+        expect(s.closed).toBe(true);
+        expect(s.raw).toHaveLength(4);
+        expect(warn).toHaveBeenCalledWith(expect.stringMatching(/unechoed/));
+        expect(s.listenerCount("keepaliveEcho")).toBe(0);
+      } finally {
+        router.close();
+      }
+    }));
+
+  it("clears the hold once an unechoed keepalive drops the session, so keepWarm and a command open a fresh one", () =>
+    onWarmTimers(async () => {
+      const { router, sessions } = makeRouter();
+      try {
+        const first = router.keepWarm(ST);
+        await settle();
+        sessions[0]!.echoKeepalive = false;
+        await vi.advanceTimersByTimeAsync(PORTAL_KEEPALIVE_MS * 2);
+        expect(sessions[0]!.closed).toBe(true);
+        const second = router.keepWarm(ST);
+        expect(second).not.toBe(first);
+        await settle();
+        expect(sessions).toHaveLength(2);
+        await router.dispatchCommand(ST, arming(1));
+        expect(sessions).toHaveLength(2);
+        expect(sessions[1]!.sent).toHaveLength(1);
+        await vi.advanceTimersByTimeAsync(PORTAL_KEEPALIVE_MS);
+        expect(sessions[1]!.raw).toEqual([PORTAL_KEEPALIVE]);
+      } finally {
+        router.close();
+      }
+    }));
+
+  it("refuses to warm a station while logged out, holding nothing", () =>
+    onWarmTimers(async () => {
+      const { router, sessions } = makeRouter({ identity: () => undefined });
+      try {
+        expect(() => router.keepWarm(ST)).toThrow(`rtc: not logged in, cannot warm ${SN}`);
+        await settle();
+        expect(sessions).toHaveLength(0);
+      } finally {
         router.close();
       }
     }));

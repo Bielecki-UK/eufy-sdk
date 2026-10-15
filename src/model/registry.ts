@@ -82,6 +82,9 @@ export const MODEL_REGISTRY: Readonly<Record<string, RegistryEntry>> = {
   T8400: { codec: "camera", caps: ["arming"], name: "Indoor Cam" },
   T8410: { codec: "camera", caps: ["arming"], name: "Indoor Cam Pan & Tilt" },
   T8442: { codec: "camera", caps: ["arming"], name: "Indoor/Outdoor Cam 1080p" },
+  // Baby Monitor E21, vendor deviceType 86 (category eufy_care), standalone. `ptz` is curated: all four
+  // rotate directions were confirmed on two units, so a record without the preset params still offers it.
+  T8354: { codec: "camera", caps: ["ptz"], name: "Baby Monitor E21" },
   // Hardwired wall-light camera; mains power asserted in MAINS_CAMERA_MODELS.
   T84A1: { codec: "camera", name: "Wall Light Cam S100" },
 

@@ -351,6 +351,12 @@ export class MegaHttpClient {
   /** True while a 2FA code is outstanding: `auth_` holds only the limited pre-verify token, so the
    *  restored-session short-circuit must NOT treat it as a usable session. Cleared on Ok/reset. */
   private pending2fa = false;
+  /**
+   * An autonomous re-login came back needing a captcha or a 2FA code, which only a login driven from outside
+   * can answer. Kept apart from {@link pending2fa} because {@link clearSession} resets that one when the
+   * limited token is rejected; cleared only by a login that completes.
+   */
+  private reloginChallenged = false;
   private tokenExpiresAt = 0;
   /**
    * Stable per-install device id: `openudid` as configured, as restored from the session store, or as
@@ -1245,11 +1251,13 @@ export class MegaHttpClient {
    * Structural rather than a list of paths: a login round trip is itself an authenticated call while a limited
    * token is held, so re-logging in from inside one would recurse — and a path list would have to be
    * maintained alongside every request the login flow makes. A 2FA code already outstanding is a login a human
-   * is part-way through, and restarting it silently would discard it. No credentials means nothing to try,
-   * so the rejection surfaces instead.
+   * is part-way through, and restarting it silently would discard it. A re-login that already came back needing
+   * a captcha or a 2FA code would need the same again, and each attempt sends the account another code, so
+   * none is tried until a login completes. No credentials means nothing to try, so the rejection surfaces
+   * instead.
    */
   private canReauthenticate(): boolean {
-    return !!this.cfg.email && !!this.cfg.password && !this.loggingIn && !this.pending2fa;
+    return !!this.cfg.email && !!this.cfg.password && !this.loggingIn && !this.pending2fa && !this.reloginChallenged;
   }
 
   /**
@@ -1267,7 +1275,10 @@ export class MegaHttpClient {
     this.reauthAttempt ??= this.login()
       .then((result) => {
         if (result.status === LoginStatus.Ok) this.logger.debug("[mega] token was rejected — logged in again");
-        else this.logger.warn(`[mega] token was rejected and the re-login needs ${result.status} — cannot recover`);
+        else {
+          this.reloginChallenged = true;
+          this.logger.warn(`[mega] token was rejected and the re-login needs ${result.status} — cannot recover`);
+        }
         return result.status === LoginStatus.Ok;
       })
       .catch((e: unknown) => {
@@ -1359,6 +1370,7 @@ export class MegaHttpClient {
 
     this.pendingCaptchaId = undefined;
     this.pending2fa = false;
+    this.reloginChallenged = false;
     this.auth_ = { userId, accountUserId, authToken, geoKey };
     this.tokenExpiresAt = reply.tokenExpiresAt;
     // Re-exchange WITH the auth token so the gateway binds the key-ident to the user.

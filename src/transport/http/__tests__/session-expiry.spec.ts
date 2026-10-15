@@ -256,6 +256,58 @@ describe("mega authenticated session rejection", () => {
     expect(login).not.toHaveBeenCalled();
   });
 
+  /**
+   * A re-login that came back asking for a 2FA code has already sent one, and nothing on this path can
+   * answer it. Each further autonomous attempt sends another code and changes nothing, so the client waits
+   * for a login driven from outside before it spends another — and that login, once verified, restores
+   * the recovery. Here the whole loop is real: the rejected calls, the login round trips and the
+   * verify-code send.
+   */
+  it("stops re-logging in once a re-login needs 2FA, until a verified login", async () => {
+    vi.useFakeTimers();
+    const mega = new MegaHttpClient({ email: "synthetic@example.invalid", password: "synthetic", region: "us-pr" });
+    const internals = mega as unknown as {
+      ensureSessionKey: () => Promise<{ shareKey: string; keyIdent: string }>;
+      httpPost: (url: string) => Promise<Response>;
+    };
+    internals.ensureSessionKey = vi.fn(async () => ({ shareKey: "00".repeat(32), keyIdent: "00".repeat(16) }));
+    const logins: string[] = [];
+    internals.httpPost = vi.fn(async (url: string) => {
+      if (url.includes("/verify_code")) return OK;
+      if (!url.includes("/passport/login")) return KICKED;
+      logins.push(url);
+      return {
+        status: 200,
+        data: {
+          code: 0,
+          data: {
+            user_id: "synthetic-user",
+            ap_cloud_user_id: "synthetic-user",
+            auth_token: `synthetic-token-${logins.length}`,
+            token_expires_at: 0,
+            fa_info: { info: "synthetic" },
+          },
+        },
+      };
+    });
+
+    await expect(call(mega)).rejects.toBeInstanceOf(SessionExpiredError);
+    expect(logins).toHaveLength(1); // the recovery login, answered with 2FA
+    for (let i = 0; i < 3; i++) {
+      await vi.advanceTimersByTimeAsync(31 * 60_000);
+      await expect(call(mega)).rejects.toBeInstanceOf(SessionExpiredError);
+    }
+    expect(logins).toHaveLength(1);
+
+    await expect(mega.login()).resolves.toMatchObject({ status: LoginStatus.TwoFactor });
+    await expect(mega.submitVerifyCode("000000")).resolves.toMatchObject({ status: LoginStatus.Ok });
+    expect(logins).toHaveLength(3);
+
+    await vi.advanceTimersByTimeAsync(31 * 60_000);
+    await expect(call(mega)).rejects.toBeInstanceOf(SessionExpiredError);
+    expect(logins).toHaveLength(4); // a rejection after the verified login recovers on its own again
+  });
+
   /** With no credentials to log in with — a host running purely off a restored session — there is nothing to try. */
   it("does not attempt a re-login it has no credentials for", async () => {
     const mega = new MegaHttpClient({ email: "", password: "" });

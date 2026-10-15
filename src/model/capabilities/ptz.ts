@@ -2,6 +2,7 @@ import { DeviceType } from "../device-types.js";
 import { setJson, setPayload } from "./access.js";
 import { method, propertiesOf, type Members, type Surface } from "./members.js";
 import type { CapabilityModule, InboundSignal, CapabilityEvent, CommandContext } from "./types.js";
+import type { CloudRecord } from "../types.js";
 import type { Command } from "../../core/contracts.js";
 
 /**
@@ -175,6 +176,24 @@ const ZOOM_MODEL_HINT = /^T8170\b|^T8425\b|S340/i;
  * dual-lens by definition (see {@link ZOOM_MODEL_HINT}'s doc note on why params alone aren't enough). */
 function hasZoomEvidence(ctx: CommandContext): boolean {
   return ZOOM_EVIDENCE_PARAMS.some((p) => ctx.paramIds.has(p)) || (!!ctx.model && ZOOM_MODEL_HINT.test(ctx.model));
+}
+
+/** Reported params that prove a SoloCam pans/tilts: the preset slots (6090/6091/6092/6210) and the
+ * rotate command surface (1029). */
+const PRESET_EVIDENCE_PARAMS = [1029, 6090, 6091, 6092, 6210];
+
+/**
+ * Fixed-lens models that report preset params anyway. A standalone T8134 (SoloCam S220,
+ * deviceType 63) reports 6090/6091/6092 as `"0"` and does not pan or tilt, so on these models the
+ * preset params prove nothing.
+ */
+const FIXED_LENS_MODELS: ReadonlySet<string> = new Set(["T8134"]);
+
+/** Whether the record reports a preset param on a model whose preset params prove pan-tilt. */
+function hasPresetEvidence(rec: CloudRecord): boolean {
+  return (
+    !FIXED_LENS_MODELS.has(rec.model ?? "") && PRESET_EVIDENCE_PARAMS.some((p) => Object.hasOwn(rec.params ?? {}, p))
+  );
 }
 
 /**
@@ -479,8 +498,9 @@ export const PTZ: CapabilityModule = {
   members: PTZ_MEMBERS,
   properties: propertiesOf(PTZ_MEMBERS),
   // SoloCam proves PT via reported preset params (6090/6091/6092/6210) and a rotate command surface
-  // (1029); Indoor-PT (deviceType 31/35/111 + C220 range 10008-10011) reports NO PT param, so the
-  // vendor deviceType is the only honest signal; explicit PT/S340/S350 model names also prove it.
+  // (1029), except on a FIXED_LENS_MODELS model; Indoor-PT (deviceType 31/35/111 + C220 range
+  // 10008-10011) reports NO PT param, so the vendor deviceType is the only honest signal; explicit
+  // PT/S340/S350 model names also prove it.
   // OUTDOOR_PT_CAMERA (48, e.g. SoloCam S340 / T8170) is pan-tilt by definition but a live unit can
   // report none of the preset params — trust the deviceType. The rotating SoloCam solar variant
   // T8124R shares deviceType 62 with the FIXED T8124 base, so its model code is the only honest
@@ -488,7 +508,7 @@ export const PTZ: CapabilityModule = {
   // a `T81\d\dR` wildcard: the "R = rotating" reading is unverified for other models, and an
   // over-broad hint would false-positive a future non-PT model, the same class of bug as a mislabel.
   detection: {
-    evidenceParams: [1029, 6090, 6091, 6092, 6210],
+    detect: hasPresetEvidence,
     deviceTypes: [
       DeviceType.OUTDOOR_PT_CAMERA,
       DeviceType.INDOOR_PT_CAMERA,

@@ -546,7 +546,7 @@ export class SharedLiveSource {
     stream.on("audio", (frame) => this.onAudio(frame));
     stream.on("stop", () => this.onUpstreamEnd());
     stream.on("error", (err) => this.onUpstreamError(err));
-    stream.on("unacknowledged", () => this.onStartUnacknowledged());
+    stream.on("unacknowledged", () => this.askForFreshSession("start unacknowledged"));
     stream.start();
   }
 
@@ -567,23 +567,12 @@ export class SharedLiveSource {
   }
 
   /**
-   * A start was abandoned unacknowledged. Ask for a replacement session where nothing has been delivered yet.
-   *
-   * The abandonment is roughly twenty byte-identical sends with no reply, against acknowledgement latencies of
-   * 4–37 ms awake and 238 ms waking, so it is the session that is not being heard rather than a slow device —
-   * `P2PSession` says as much: the camera was never told to stream, so this warm-up can only time out. Where
-   * media has already flowed the abandonment means something else and this does nothing.
-   *
-   * The retry ticker is stopped while a replacement is awaited, because every tick it issues goes to the same
-   * unheard session. The DEADLINE is left running: the window belongs to the attempt, not to the session it
-   * started on.
-   */
-  private onStartUnacknowledged(): void {
-    this.askForFreshSession("start unacknowledged");
-  }
-
-  /**
    * Ask the owner for a replacement session where nothing has been delivered yet, answering whether one is coming.
+   *
+   * An unacknowledged start is roughly twenty byte-identical sends with no reply, against acknowledgement latencies
+   * of 4–37 ms awake and 238 ms waking, so it is the session that is not being heard rather than a slow device: the
+   * camera was never told to stream. Where media has already flowed the abandonment means something else and this
+   * does nothing. The DEADLINE is left running: the window belongs to the attempt, not to the session it started on.
    *
    * The retry ticker is stopped only once the owner has said it is replacing the session: an owner that cannot
    * (an attached camera shares its HomeBase session) leaves the source re-issuing as it always did.

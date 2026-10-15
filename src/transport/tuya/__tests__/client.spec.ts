@@ -180,12 +180,12 @@ describe("TuyaClient et=3 reply decryption", () => {
   it("decrypts an encrypted string result into an object the caller reads", async () => {
     const http: TuyaHttpPost = async (_url, body) => {
       const reqId = new URLSearchParams(body).get("requestId")!;
-      return sealFor(reqId, null, { success: true, result: { dps: { "8": "100" } } });
+      return sealFor(reqId, null, { success: true, result: { "8": 100 } });
     };
     const c = new TuyaClient({ signer: new FixedSigner(), chKey: "7cbfe6d8", sid: "preset-sid", http });
-    const res = await c.getDeviceDps<{ dps: Record<string, unknown> }>("dev-1");
+    const res = await c.getDeviceDps<Record<string, unknown>>("dev-1");
     expect(res.success).toBe(true);
-    expect(res.result).toEqual({ dps: { "8": "100" } });
+    expect(res.result).toEqual({ "8": 100 });
   });
 
   it("login decrypts its replies (null variant), captures ecode, and keys later calls with it", async () => {
@@ -201,14 +201,14 @@ describe("TuyaClient et=3 reply decryption", () => {
         return sealFor(reqId, null, { success: true, result: { sid: "sid-1", uid: "uid-1", ecode: "EC-xyz" } });
       }
       // A post-login session call must decrypt with the captured ecode, not the null variant.
-      return sealFor(reqId, "EC-xyz", { success: true, result: { dps: { "8": "50" } } });
+      return sealFor(reqId, "EC-xyz", { success: true, result: { "8": 50 } });
     };
     const c = new TuyaClient({ signer: new FixedSigner(), chKey: "7cbfe6d8", http });
     const res = await c.login("12345", "44");
     expect(res).toEqual({ sid: "sid-1", uid: "uid-1" });
     expect(c.getSession().ecode).toBe("EC-xyz");
 
-    const dps = await c.getDeviceDps<{ dps: Record<string, unknown> }>("dev-1");
-    expect(dps.result).toEqual({ dps: { "8": "50" } });
+    const dps = await c.getDeviceDps<Record<string, unknown>>("dev-1");
+    expect(dps.result).toEqual({ "8": 50 });
   });
 });

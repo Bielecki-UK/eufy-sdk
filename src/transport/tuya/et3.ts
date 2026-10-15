@@ -13,7 +13,7 @@ import { gunzipSync } from "node:zlib";
 import { resolveSignKey } from "./sign.js";
 
 /**
- * The per-reply AES-128 key, `getEncryptoKey(requestId, ecode)`: take the lowercase hex of
+ * The per-request AES-128 key, `getEncryptoKey(requestId, ecode)`: take the lowercase hex of
  * `HMAC-SHA256(key = requestId, msg = K[+ "_" + ecode])`, keep the first 16 hex characters, and use
  * those characters as 16 ASCII bytes. `K` is the app HMAC key ({@link resolveSignKey}).
  *

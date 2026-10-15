@@ -14,14 +14,3 @@ export const PORTAL_KEEPALIVE = Buffer.from(
 
 /** How often {@link PORTAL_KEEPALIVE} goes out on an RTC session. */
 export const PORTAL_KEEPALIVE_MS = 29_000;
-
-/** The keepalive's leading bytes, which the hub's echo repeats; neither a PTCS nor a portal packet opens so. */
-const ECHO_LEAD = PORTAL_KEEPALIVE.subarray(0, 8);
-
-/**
- * True for the hub's echo of {@link PORTAL_KEEPALIVE}: an unframed message of the keepalive's 36 bytes
- * that opens with its leading bytes `0009000010000000`.
- */
-export function isPortalKeepaliveEcho(message: Buffer): boolean {
-  return message.length === PORTAL_KEEPALIVE.length && message.subarray(0, ECHO_LEAD.length).equals(ECHO_LEAD);
-}

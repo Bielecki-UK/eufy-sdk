@@ -1744,20 +1744,13 @@ export class EufyMega extends EventEmitter {
   }
 
   /**
-   * Keep a T9000 station's RTC command session open and warm, so a command fires without the cold
-   * reconnect an idle-closed session pays. Opens or reuses the session, suppresses its idle-close, and
-   * sends the portal keepalive on it; the hub grants one RTC session per account, so the hold keeps that
-   * slot. A keepalive the hub does not echo by the next one drops the session, and a drop (that, or the
-   * slot taken elsewhere) ends the keepalive until the next command or call reopens the session.
-   *
-   * Answers an idempotent disposer that releases the hold and lets the idle-close resume. Throws for a
-   * T9000 when no account is logged in. A station other than a T9000, where the keepalive is unobserved,
-   * answers a no-op disposer.
+   * Keep a T9000 station's RTC command session open and warm, so a command fires without a cold reconnect.
+   * Answers the hold's disposer; throws for any other station, and while logged out.
    */
   keepStationWarm(stationSn: string): () => void {
     const { t9000 } = this.stationOf(stationSn);
     const route = this.rtcRouteFor(stationSn);
-    if (!t9000 || !route) return () => {};
+    if (!t9000 || !route) throw new Error(`rtc: ${stationSn} has no warm command session`);
     return this.rtc.keepWarm(route);
   }
 

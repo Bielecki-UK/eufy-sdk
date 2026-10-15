@@ -195,12 +195,10 @@ describe("keepStationWarm", () => {
     });
   });
 
-  it("answers a no-op disposer for a station that is not a T9000, without touching the router", () => {
+  it("throws for a station that is not a T9000, without touching the router", () => {
     const { internals } = fixture(DeviceType.HB3);
     const keepWarm = vi.spyOn(warmInternals(internals).rtc, "keepWarm");
-    const disposer = warmInternals(internals).keepStationWarm(HUB);
-    expect(typeof disposer).toBe("function");
-    expect(() => disposer()).not.toThrow();
+    expect(() => warmInternals(internals).keepStationWarm(HUB)).toThrow(`rtc: ${HUB} has no warm command session`);
     expect(keepWarm).not.toHaveBeenCalled();
   });
 });

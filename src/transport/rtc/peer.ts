@@ -18,7 +18,7 @@
 import { EventEmitter } from "node:events";
 import type { DataChannel, IceServer, PeerConnection, RtcConfig } from "node-datachannel";
 import { noopLogger, type Logger } from "../../core/logger.js";
-import { isPortalKeepaliveEcho } from "./portal-keepalive.js";
+import { PORTAL_KEEPALIVE } from "./portal-keepalive.js";
 import { PtcsFramer } from "./ptcs-framer.js";
 import {
   ANKER_MAX_MESSAGE_SIZE,
@@ -321,7 +321,7 @@ export class RtcPeer extends EventEmitter<RtcPeerEvents> {
       if (n <= 3 || n % 100 === 0) {
         this.logger.debug(`[rtc] wire ${label} #${n} ${buf.length}B ${buf.subarray(0, 8).toString("hex")}`);
       }
-      if (label === COMMAND_CHANNEL && isPortalKeepaliveEcho(buf)) {
+      if (label === COMMAND_CHANNEL && buf.equals(PORTAL_KEEPALIVE)) {
         this.emit("keepaliveEcho");
         return;
       }

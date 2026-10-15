@@ -116,22 +116,19 @@ interface StationSession {
   idle?: ReturnType<typeof setTimeout>;
   /** Live pulls holding the session open. */
   leases: number;
-  /** A {@link RtcCommandRouter.keepWarm} hold is suppressing the idle-close. */
-  warm?: boolean;
 }
 
 /**
  * A {@link RtcCommandRouter.keepWarm} hold on one station: the keepalive timer sending
- * {@link PORTAL_KEEPALIVE}, the session listeners that end it and record the hub's echo, whether the
- * last keepalive sent is still unechoed, and whether its disposer has run.
+ * {@link PORTAL_KEEPALIVE}, the session listeners that end it and record the hub's echo, and whether the
+ * last keepalive sent is still unechoed.
  */
 interface WarmHold {
   keepalive?: ReturnType<typeof setInterval>;
-  /** The session the hold watches, and its `close` and `keepaliveEcho` listeners the disposer removes. */
-  watch?: { session: RtcSession; onClose: () => void; onEcho: () => void };
+  /** The station session the hold leases, and its `close` and `keepaliveEcho` listeners the disposer removes. */
+  watch?: { st: StationSession; onClose: () => void; onEcho: () => void };
   /** A keepalive went out and the hub has not echoed it since. */
   awaitingEcho: boolean;
-  disposed: boolean;
   dispose: () => void;
 }
 
@@ -440,19 +437,11 @@ export class RtcCommandRouter {
   }
 
   /**
-   * Hold a station's command session open and warm, so a command fires without the cold reconnect an
-   * idle-closed session pays — a reconnect that regularly overruns {@link CONNECT_TIMEOUT_MS}.
+   * Hold a station's command session open: one hold per station, its idle-close ({@link IDLE_CLOSE_MS})
+   * suppressed, {@link PORTAL_KEEPALIVE} sent every {@link PORTAL_KEEPALIVE_MS}, and the session dropped
+   * on a tick that finds the previous keepalive unechoed. A closed session ends the hold.
    *
-   * Opens or reuses the station session, suppresses its idle-close ({@link IDLE_CLOSE_MS}) for the life
-   * of the hold, and sends {@link PORTAL_KEEPALIVE} on it every {@link PORTAL_KEEPALIVE_MS}. One hold per
-   * station: a second call for the same station answers the first call's disposer and arms no second
-   * timer. The hub grants one RTC session per account, so the hold keeps that one slot. The hub echoes
-   * each keepalive; a tick that finds the previous keepalive unechoed drops the session. When the session
-   * closes (that drop, or the slot taken elsewhere) the keepalive stops and the hold clears, and the next
-   * command or `keepWarm` opens a fresh session rather than reopening in a loop.
-   *
-   * Answers an idempotent disposer that stops the keepalive, removes the hold's listeners from the
-   * session and releases the hold, letting the idle-close resume. Throws when no account is logged in.
+   * Answers an idempotent disposer that releases the hold. Throws when no account is logged in.
    */
   keepWarm(route: RtcRoute): () => void {
     const sn = route.stationSn;
@@ -462,15 +451,13 @@ export class RtcCommandRouter {
     if (!identity) throw new Error(`rtc: not logged in, cannot warm ${sn}`);
     const hold: WarmHold = {
       awaitingEcho: false,
-      disposed: false,
       dispose: () => {
-        if (hold.disposed) return;
-        hold.disposed = true;
-        if (this.warm.get(sn) === hold) this.warm.delete(sn);
+        if (this.warm.get(sn) !== hold) return;
+        this.warm.delete(sn);
+        const st = hold.watch?.st;
         this.unwatch(hold);
-        const st = this.sessions.get(sn);
-        if (st?.warm) {
-          st.warm = false;
+        if (st) {
+          st.leases = Math.max(0, st.leases - 1);
           this.touch(sn, st);
         }
       },
@@ -497,11 +484,11 @@ export class RtcCommandRouter {
       this.deps.onError?.(e instanceof Error ? e : new Error(String(e)));
       return;
     }
-    if (hold.disposed) {
+    if (this.warm.get(sn) !== hold) {
       this.touch(sn, st);
       return;
     }
-    st.warm = true;
+    st.leases++;
     this.touch(sn, st);
     const onClose = (): void => {
       this.unwatch(hold);
@@ -510,7 +497,7 @@ export class RtcCommandRouter {
     const onEcho = (): void => {
       hold.awaitingEcho = false;
     };
-    hold.watch = { session: st.session, onClose, onEcho };
+    hold.watch = { st, onClose, onEcho };
     st.session.once("close", onClose);
     st.session.on("keepaliveEcho", onEcho);
     hold.keepalive = setInterval(() => {
@@ -519,8 +506,8 @@ export class RtcCommandRouter {
         this.drop(sn, st);
         return;
       }
-      if (st.session.sendRaw(PORTAL_KEEPALIVE)) hold.awaitingEcho = true;
-      else this.deps.logger?.warn?.(`[rtc] ${sn} warm keepalive not sent`);
+      hold.awaitingEcho = true;
+      st.session.sendRaw(PORTAL_KEEPALIVE);
     }, PORTAL_KEEPALIVE_MS);
     hold.keepalive.unref?.();
   }
@@ -530,15 +517,15 @@ export class RtcCommandRouter {
     if (hold.keepalive) clearInterval(hold.keepalive);
     hold.keepalive = undefined;
     if (hold.watch) {
-      hold.watch.session.off("close", hold.watch.onClose);
-      hold.watch.session.off("keepaliveEcho", hold.watch.onEcho);
+      hold.watch.st.session.off("close", hold.watch.onClose);
+      hold.watch.st.session.off("keepaliveEcho", hold.watch.onEcho);
     }
     hold.watch = undefined;
   }
 
   private touch(sn: string, st: StationSession): void {
     if (st.idle) clearTimeout(st.idle);
-    if (st.leases > 0 || st.warm) return;
+    if (st.leases > 0) return;
     st.idle = setTimeout(() => this.drop(sn, st), IDLE_CLOSE_MS);
     st.idle.unref?.();
   }

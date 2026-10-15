@@ -102,6 +102,14 @@ describe("shared live source construction", () => {
     expect(opts.budgetGraceMs).toBe(5000);
   });
 
+  it("passes the warm-up timings the first caller chose", async () => {
+    const router = routerWithSession({ warn: vi.fn() });
+    const source = await router.sharedLiveSourceFor("T8000P0000000000", { warmRetryMs: 5000, warmTimeoutMs: 45000 });
+    const timings = source as unknown as { warmRetryMs: number; warmTimeoutMs: number };
+    expect(timings.warmRetryMs).toBe(5000);
+    expect(timings.warmTimeoutMs).toBe(45000);
+  });
+
   /**
    * A stopped source's pull is dead, so re-using it protects nothing — while keeping it meant the first
    * caller's options outlived the session they were chosen for, still dictating the budget for a pull
@@ -258,6 +266,18 @@ describe("shared live source options", () => {
     const msg = logger.warn.mock.calls[0][0] as string;
     expect(msg).toMatch(/keepAliveMs/);
     expect(msg).toMatch(/powered/);
+  });
+
+  it("reports a warm-up timing a later caller could not apply", async () => {
+    const logger = { warn: vi.fn() };
+    const router = routerWithSession(logger);
+
+    await router.sharedLiveSourceFor("T8000P0000000000", { warmTimeoutMs: 20000 });
+    await router.sharedLiveSourceFor("T8000P0000000000", { warmRetryMs: 5000, warmTimeoutMs: 45000 });
+
+    const msg = logger.warn.mock.calls[0][0] as string;
+    expect(msg).toMatch(/warmRetryMs/);
+    expect(msg).toMatch(/warmTimeoutMs/);
   });
 
   /** `eccPrivateKey` is a Buffer, so identity comparison warns on every call for keys that match. */

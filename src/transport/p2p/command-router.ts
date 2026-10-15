@@ -178,6 +178,10 @@ export interface SharedLiveOpts extends SharedSourceHints, AbortableCall {
   batteryBudgetMs?: number;
   /** Grace after the budget notice to `extend()` before auto-stop, in ms (default 10000). */
   budgetGraceMs?: number;
+  /** Interval at which the start is re-issued until the first keyframe, in ms (default 2000). */
+  warmRetryMs?: number;
+  /** Deadline for the first keyframe before the source fails to start, in ms (default 20000). */
+  warmTimeoutMs?: number;
 }
 
 /**
@@ -196,6 +200,8 @@ const SHARED_LIVE_OPT_KEYS = [
   "powered",
   "batteryBudgetMs",
   "budgetGraceMs",
+  "warmRetryMs",
+  "warmTimeoutMs",
 ] as const satisfies readonly (keyof SharedLiveOpts)[];
 
 /**
@@ -1036,6 +1042,8 @@ export class P2PCommandRouter {
         powered: opts.powered,
         batteryBudgetMs: opts.batteryBudgetMs,
         budgetGraceMs: opts.budgetGraceMs,
+        warmRetryMs: opts.warmRetryMs,
+        warmTimeoutMs: opts.warmTimeoutMs,
         logger,
         label: key,
         onActive: () => this.manager.retain(sessionKey),

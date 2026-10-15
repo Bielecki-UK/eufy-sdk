@@ -69,7 +69,7 @@ export const MOWER_MEMBERS = {
     unit: "%",
     kind: "percent",
     provenance: "mega",
-    description: "Speaker volume 0-100 (DP 26, volume_set). Read-only: no write captured.",
+    description: "Speaker volume 0-100 (DP 26, volume_set). Read-only.",
   },
   /** Whether the child lock is on (DP 47, `child_lock`). */
   childLock: {
@@ -77,7 +77,7 @@ export const MOWER_MEMBERS = {
     type: "bool",
     kind: "boolean",
     provenance: "mega",
-    description: "Child lock on (DP 47, child_lock). Read-only: no write captured.",
+    description: "Child lock on (DP 47, child_lock). Read-only.",
   },
   /** Whether the mower returns to its station when it detects rain (DP 101, `rain_auto_return`). */
   rainAutoReturn: {
@@ -105,7 +105,7 @@ export const MOWER_MEMBERS = {
     min: 25,
     max: 75,
     provenance: "mega",
-    description: "Cutting height 25-75 mm (DP 110, mow_height). Read-only: no write captured.",
+    description: "Cutting height 25-75 mm (DP 110, mow_height). Read-only.",
   },
   /** Progress of saving the map (DP 118, `save_map_process`). */
   mapSaveProgress: {
@@ -140,7 +140,7 @@ export const MOWER_MEMBERS = {
     type: "bool",
     kind: "boolean",
     provenance: "mega",
-    description: "Edge trimming on (DP 128, edge_trim). Read-only: no write captured.",
+    description: "Edge trimming on (DP 128, edge_trim). Read-only.",
   },
   /** Whether a fixed mowing angle is in use (DP 130, `enable_work_angle`); the angle is `workAngle`. */
   workAngleEnabled: {

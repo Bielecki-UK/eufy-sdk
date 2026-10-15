@@ -335,6 +335,11 @@ export class EufyMega extends EventEmitter {
   constructor(opts: EufyMegaOptions) {
     super();
     this.opts = opts;
+    if ("country" in opts && opts.countryCode === undefined) {
+      opts.logger?.warn?.(
+        `[eufy] option "country" is not read; the account country is "countryCode", so this client runs as "US".`,
+      );
+    }
     this.prewarmEvents = new Set(opts.prewarmEvents ?? []);
     this.prewarmTiers = new Set(opts.prewarmTiers ?? DEFAULT_PREWARM_TIERS);
     this.mega = new MegaHttpClient(opts);

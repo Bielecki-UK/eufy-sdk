@@ -1,8 +1,8 @@
 import { enumLabels } from "../../core/util.js";
 import { describeDevice, setJsonRaw, setPayload } from "./access.js";
 import { accepts, method, propertiesOf, type Members, type Surface } from "./members.js";
-import type { CapabilityModule, CapabilityStateReader, CommandContext } from "./types.js";
-import { CusPushEvent } from "../push-events.js";
+import type { CapabilityModule, CapabilityStateReader, CommandContext, InboundSignal } from "./types.js";
+import { CusPushAlarmType, CusPushEvent } from "../push-events.js";
 import type { Command } from "../../core/contracts.js";
 
 /** The station broadcast channel the HomeBase's own controls ride (not a device channel). */
@@ -464,6 +464,31 @@ export const ARMING_MEMBERS = {
 } as const satisfies Members;
 
 /**
+ * The {@link CusPushAlarmType} codes that end an alarm rather than raise one: stopped by the hub, by the
+ * device, from the keypad, from the app, or on the HomeBase itself.
+ */
+const ALARM_STOP_TYPES: ReadonlySet<number> = new Set([
+  CusPushAlarmType.HUB_STOP,
+  CusPushAlarmType.DEV_STOP,
+  CusPushAlarmType.HUB_STOP_BY_KEYPAD,
+  CusPushAlarmType.HUB_STOP_BY_APP,
+  CusPushAlarmType.HUB_STOP_BY_HUB,
+]);
+
+/**
+ * The `phase` and `alarmType` an alarm push (`CusPushEvent.ALARM`) carries, read from its `type` field,
+ * a {@link CusPushAlarmType} code. A HomeBase pushes the same event id for both ends of an alarm and only
+ * `type` separates them: a captured `trigger` then `stop` on a T8010 pushed `type: 4` (`APP`) and then
+ * `type: 16` (`HUB_STOP_BY_APP`). A stop code answers `"stopped"`; any other code, or a push without a
+ * numeric `type`, answers `"triggered"`. `alarmType` is present only when `type` is numeric.
+ */
+function decodeAlarmPhase(signal: InboundSignal): Record<string, unknown> {
+  const type = signal.source === "push" ? signal.payload?.["type"] : undefined;
+  if (typeof type !== "number") return { phase: "triggered" };
+  return { phase: ALARM_STOP_TYPES.has(type) ? "stopped" : "triggered", alarmType: type };
+}
+
+/**
  * `arming` — guard/arming mode. `armingMode` (see {@link ARMING_CMD.SET_ARMING}) has a verified read/write
  * MECHANISM, and all 9 modes it reports are now confirmed as writes — the {@link ArmingMode} union is the
  * whole set. See `ARMING_MODE_WIRE` for which three are byte-captured and which six are live-confirmed.
@@ -483,8 +508,9 @@ export const ARMING: CapabilityModule = {
    * generic `CusPushEvent` channel, so these ids are shared with other families and resolve by
    * capability (see the barrel's event index).
    *
-   * The alarm ids carry a static `phase` so one event name covers the whole lifecycle, the same shape
-   * `battery` uses for its threshold pushes. The mode-switch push is known to identify WHICH mode and
+   * The alarm ids carry a `phase` so one event name covers the whole lifecycle: the countdown push a
+   * static `"delayed"`, the alarm push a `"triggered"` or `"stopped"` read from its alarm type (see
+   * {@link decodeAlarmPhase}). The mode-switch push is known to identify WHICH mode and
    * what triggered the change, but neither has been observed on the wire here, so this emits the bare
    * transition and refreshes the `mode` read rather than trusting a decoded field.
    */
@@ -495,7 +521,7 @@ export const ARMING: CapabilityModule = {
       emit: "armingModeChanged",
       refresh: { member: "mode" },
     },
-    { source: "push", match: CusPushEvent.ALARM, emit: "alarm", payload: { phase: "triggered" } },
+    { source: "push", match: CusPushEvent.ALARM, emit: "alarm", derive: decodeAlarmPhase },
     { source: "push", match: CusPushEvent.ALARM_DELAY, emit: "alarm", payload: { phase: "delayed" } },
   ],
 };

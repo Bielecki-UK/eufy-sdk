@@ -326,6 +326,23 @@ describe("decodeEvent — detection sub-events and station events", () => {
     expect(push(10)[0]).toMatchObject({ event: "alarm", payload: { phase: "triggered" } });
     expect(push(16)[0]).toMatchObject({ event: "alarm", payload: { phase: "delayed" } });
   });
+
+  /**
+   * One alarm push id carries both ends of an alarm; its `type` (a `CusPushAlarmType`) separates them.
+   * Shapes from a HomeBase `trigger` then `stop`: `type: 4` (APP) then `type: 16` (HUB_STOP_BY_APP).
+   */
+  it("reads the alarm phase from the push's alarm type", () => {
+    const alarm = (payload: Record<string, unknown>) =>
+      decodeEvent({ source: "push", eventType: 10, deviceSn: "T8000P0000000000", payload })[0].payload;
+
+    expect(alarm({ type: 4 })).toMatchObject({ phase: "triggered", alarmType: 4 });
+    expect(alarm({ type: 7 })).toMatchObject({ phase: "triggered", alarmType: 7 });
+    for (const stop of [0, 1, 15, 16, 17]) {
+      expect(alarm({ type: stop })).toMatchObject({ phase: "stopped", alarmType: stop });
+    }
+    expect(alarm({})).toMatchObject({ phase: "triggered" });
+    expect(alarm({})).not.toHaveProperty("alarmType");
+  });
 });
 
 /**

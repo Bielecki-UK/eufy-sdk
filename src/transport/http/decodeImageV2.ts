@@ -57,12 +57,6 @@ import { decode as jpegDecode } from "jpeg-js";
 const V2_PREFIX = "v2_eufysecurity:";
 
 /**
- * The standard baseline DC-chrominance Huffman marker — the first plaintext byte of a v2 tail that keeps
- * its chroma DHTs.
- */
-const DC_CHROMA = Buffer.from([0xff, 0xc4, 0x00, 0x1f, 0x01]);
-
-/**
  * The plaintext start of a v2 blob whose chroma Huffman tables are encrypted too: a DRI segment (`FF DD`,
  * length 4, then two interval bytes) directly in front of the SOS header of a 3-component scan (`FF DA`,
  * length 12).
@@ -113,6 +107,9 @@ const DHT_AC_LUMA = Buffer.from(
 
 /** The standard DC-chroma Huffman table (Annex K.3, table 1), as a complete DHT segment; see {@link DHT_DC_LUMA}. */
 const DHT_DC_CHROMA = Buffer.from("ffc4001f0100030101010101010101010000000000000102030405060708090a0b", "hex");
+
+/** The standard baseline DC-chrominance Huffman marker — the first plaintext byte of the v2 tail. */
+const DC_CHROMA = DHT_DC_CHROMA.subarray(0, 5);
 
 /** The standard AC-chroma Huffman table (Annex K.3, table 1), as a complete DHT segment; see {@link DHT_DC_LUMA}. */
 const DHT_AC_CHROMA = Buffer.from(
@@ -402,9 +399,7 @@ export function isV2Image(data: Buffer): boolean {
 
 /**
  * Decode a v2 blob to a plain JPEG buffer by reconstructing its header, or null if it isn't v2, the
- * plaintext scan can't be located, or no frame shape explains it. The plaintext tail starts either at
- * the DC-chroma DHT or at the DRI segment in front of the SOS; the second form gets the standard chroma
- * DHTs in front of it (see `plaintextTail`).
+ * plaintext scan can't be located, or no frame shape explains it.
  *
  * Three steps and no pixel rewrite: the frame shape is read out of the entropy scan,
  * one probe decode both proves the spliced JPEG decodes and measures how far the substitute quant

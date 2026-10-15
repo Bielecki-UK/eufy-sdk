@@ -31,7 +31,7 @@ import { jpegGeometry } from "../transport/p2p/media.js";
 import type { PowerTier } from "../transport/p2p/session-manager.js";
 import { MqttCommandRouter } from "../transport/mqtt/command-router.js";
 import { TuyaCommandRouter } from "../transport/tuya/command-router.js";
-import { TuyaDpRouter, parseTuyaDpReport } from "../transport/tuya/dp-codec.js";
+import { TuyaDpRouter } from "../transport/tuya/dp-codec.js";
 import { rawDpCodec } from "../transport/raw-dp.js";
 import { resolveLightEffect as resolveLightEffectHttp } from "../transport/http/light-catalog.js";
 import {
@@ -1920,16 +1920,6 @@ export class EufyMega extends EventEmitter {
     transport.on("disconnect", (r) => this.emit("disconnect", r));
     transport.on("message", (m) => {
       this.emit("message", m); // raw MQTT message (low-level escape hatch)
-      if (m.deviceSn) {
-        const dev = this.registry.list().find((d) => d.sn === m.deviceSn);
-        if (dev?.category === "eufy_home_tuya") {
-          const dps = parseTuyaDpReport(m.raw);
-          if (dps) {
-            this.tuyaDpRouter.deliver(m.deviceSn, dps);
-            return;
-          }
-        }
-      }
       if (m.deviceSn) {
         // The map stream. A protocol-41 message is nothing else, so it stops here rather than being
         // walked by DP parsers that would each correctly decline it.

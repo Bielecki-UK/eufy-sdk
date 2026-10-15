@@ -940,9 +940,8 @@ export function bindMembers<M extends Members>(members: M, deps: MemberDeps): Su
     // One availability decision across getter, setter and manifest: a member gated off by `available`
     // for this device is not exposed as a getter either (the manifest already omits it).
     const available = !m.available || m.available(ctx);
-    // Either wire is evidence: the member's own param where it has one, or the owner's payload that
-    // carries the same value on the other device family.
-    const reported = available && (reads(m, ctx) || (from !== undefined && ctx.paramIds.has(from.param)));
+    // The getter gate is the manifest's `reported`, plus the realtime opt-out (see `wasReported`).
+    const reported = available && (m.realtime === true || wasReported(m, from, ctx));
     if (reported && !m.writeOnly && !m.unexposed) {
       const decode = m.decode;
       // The member's own wire wins; the owner's payload is the fallback for a device that does not

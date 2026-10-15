@@ -25,8 +25,9 @@ export interface BrokerCredentials {
 
 export interface ProbeResult {
   ip: string;
-  /** True iff SUBSCRIBE to the target topic was granted (qos 0/1/2, not the 0x80 deny code). */
+  /** True iff SUBSCRIBE to the target topic was granted (qos 0/1/2, not a return code >= 0x80). */
   granted: boolean;
+  /** The SUBACK return code for the topic, the deny code included (0x80, or an MQTT 5 reason such as 0x87). */
   grantedQos?: number;
   error?: string;
   ms: number;
@@ -105,8 +106,15 @@ export async function probeBrokerInstance(
     });
     const timer = setTimeout(() => finish({ granted: false, error: "timeout" }), timeoutMs);
     client.on("connect", () => {
-      client.subscribe(opts.topic, { qos: 1 }, (err, granted) => {
-        if (err) return finish({ granted: false, error: err.message });
+      client.subscribe(opts.topic, { qos: 1 }, (err, granted, packet) => {
+        if (err) {
+          const code = packet?.granted?.[0];
+          return finish({
+            granted: false,
+            grantedQos: typeof code === "number" ? code : undefined,
+            error: err.message,
+          });
+        }
         const g = granted?.[0];
         const denied = !g || g.qos === 128;
         finish({ granted: !denied, grantedQos: g?.qos });

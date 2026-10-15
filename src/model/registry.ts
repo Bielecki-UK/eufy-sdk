@@ -52,6 +52,8 @@ export const MODEL_REGISTRY: Readonly<Record<string, RegistryEntry>> = {
   // Cameras with curated extras that aren't always provable from a fresh device's params.
   T8423: { codec: "camera", caps: ["light", "battery"], name: "Floodlight Cam" },
   T8210: { codec: "camera", caps: ["doorbell", "battery"], name: "Video Doorbell" },
+  // T8210 hardware variant, reported as its own code; shares the T8210 row.
+  T8210C: { codec: "camera", caps: ["doorbell", "battery"], name: "Video Doorbell" },
   // Confirmed against a real owned unit (named "Doorbell"): Video Doorbell Dual.
   T8214: { codec: "camera", caps: ["doorbell", "battery"], name: "Video Doorbell Dual" },
   // Battery Video Doorbell Dual, vendor deviceType 91 (BATTERY_DOORBELL_PLUS), reported by two users.

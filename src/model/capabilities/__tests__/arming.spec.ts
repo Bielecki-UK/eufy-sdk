@@ -260,10 +260,6 @@ describe("arming capability module", () => {
   });
 
   /**
-   * The Device Control Notification checkbox, replayed on a T8010: the reported table written back whole on
-   * cmd 1255, channel 0, with only one device's flag 0x08 changed. Synthetic table, captured shape.
-   */
-  /**
    * A standalone T8170's own Device Control entry: read from its own params (1225 Home, 1239 Away, 1148
    * custom1), written to itself on cmd 1255 as a one-entry table with only flag 0x08 changed. Values as
    * captured: Home 9 (notification + recording), Light Alarm 0x20, custom1 on mode_id 3.
@@ -318,6 +314,10 @@ describe("arming capability module", () => {
     });
   });
 
+  /**
+   * The Device Control Notification checkbox, replayed on a T8010: the reported table written back whole on
+   * cmd 1255, channel 0, with only one device's flag 0x08 changed. Synthetic table, captured shape.
+   */
   describe("device notification (replayed on a T8010)", () => {
     const homeTable = {
       mode_id: 1,

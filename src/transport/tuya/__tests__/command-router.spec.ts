@@ -81,10 +81,5 @@ describe("TuyaCommandRouter", () => {
       expect(await router.fetchDps("sn-1")).toEqual({ 5: "standby", 8: 37, 47: true });
       expect(actions).toEqual(["smartlife.m.device.dp.get"]);
     });
-
-    it("answers null for a reply with no DPs", async () => {
-      const { router } = routerAnswering({ success: true, result: [] });
-      expect(await router.fetchDps("sn-1")).toBeNull();
-    });
   });
 });

@@ -4,8 +4,7 @@
  * The eufy app does NOT exchange a server credential with Tuya. Instead it deterministically
  * derives a Tuya username + password from the eufy account's numeric user id and logs into the
  * Tuya cloud with them (auto-registering that Tuya user on first login). The derivation is the
- * app's `TuyaAccountUtils` under its production (`MP`) environment, which selects the `eh-` prefix,
- * and a live login under it succeeds:
+ * app's `TuyaAccountUtils` under its production (`MP`) environment, which selects the `eh-` prefix:
  *
  *   username = "eh-" + eufyUserId
  *   password = UPPERCASE-HEX( AES-128-CBC-NoPadding( pad16("eh-"+eufyUserId, '0'), KEY, IV ) )

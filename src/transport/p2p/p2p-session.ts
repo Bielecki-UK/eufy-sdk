@@ -95,8 +95,8 @@ export const CONNECT_TIMEOUT_MS = 15_000;
 export const STATION_CHANNEL = 255;
 /**
  * CMD_GATEWAYINFO — sent once on connect to prompt the station to start reporting. The reply carries the
- * level-2 key envelope in one layout under either seal: level-1 encrypted (HomeBases, floodlight cameras) or
- * in the clear (signCode 0, standalone indoor cameras).
+ * level-2 key envelope in one layout under either seal: level-1 encrypted (signCode 1) or in the clear
+ * (signCode 0).
  */
 const CMD_GATEWAYINFO = 1100;
 const CMD_START_REALTIME_MEDIA = 1003;

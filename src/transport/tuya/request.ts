@@ -235,8 +235,8 @@ export function buildPublishDpsAction(devId: string, gwId: string, dps: Record<s
 }
 
 /**
- * READ: a device's current data-points. Action `smartlife.m.device.dp.get` v1.0, postData `{ devId }`,
- * as the app's device SDK sends it. The reply `result` is a flat `{ "<dpId>": value }` map.
+ * READ: a device's current data-points. Action `smartlife.m.device.dp.get` v1.0, postData `{ devId }`.
+ * The reply `result` is a flat `{ "<dpId>": value }` map.
  */
 export function buildGetDeviceDpsAction(devId: string): TuyaAction {
   return {

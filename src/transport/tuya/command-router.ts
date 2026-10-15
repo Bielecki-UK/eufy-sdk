@@ -50,9 +50,9 @@ export class TuyaCommandRouter {
   private loginOnce: Promise<void> | null = null;
 
   /**
-   * eufy SN → Tuya device ids, populated by the facade via {@link registerDevice}.
-   * The facade extracts the Tuya id from the `raw` device record fields (`tuya_uuid`,
-   * `tuya_virtual_id`, `tuya_device_id`, `virtualId`) and registers it once the device list loads.
+   * eufy SN → Tuya device ids, populated via {@link registerDevice} once the device list loads.
+   * The Tuya id is the record's first non-empty `tuya_uuid` / `tuya_virtual_id` / `tuya_device_id` /
+   * `virtualId`, or the device's serial when the record carries none of them.
    */
   private readonly snMap = new Map<string, TuyaDeviceIds>();
 
@@ -78,10 +78,10 @@ export class TuyaCommandRouter {
   }
 
   /**
-   * Register a eufy SN → Tuya devId mapping. Called by the facade for each `eufy_home_tuya`
-   * device after the cloud device list loads. The facade extracts the Tuya id from the device's
-   * raw record (`tuya_uuid` / `tuya_virtual_id` / `tuya_device_id` / `virtualId` fields).
-   * `gwId` defaults to `devId` — standalone devices share the two.
+   * Register a eufy SN → Tuya devId mapping for an `eufy_home_tuya` device. `devId` is the record's
+   * first non-empty `tuya_uuid` / `tuya_virtual_id` / `tuya_device_id` / `virtualId`, or the device's
+   * serial when the record carries none of them. `gwId` defaults to `devId` — standalone devices
+   * share the two.
    */
   registerDevice(sn: string, devId: string, gwId = devId): void {
     this.snMap.set(sn, { devId, gwId });
@@ -142,7 +142,7 @@ export class TuyaCommandRouter {
     if (!ids) {
       throw new Error(
         `TuyaCommandRouter: no Tuya device id registered for ${sn}. ` +
-          "Ensure getDevices() was called and the cloud record includes a tuya_uuid / tuya_virtual_id field.",
+          "Ensure getDevices() was called; it registers every eufy_home_tuya device under its Tuya id or its serial.",
       );
     }
     await this.client!.publishDps(

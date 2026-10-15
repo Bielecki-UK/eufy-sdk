@@ -60,6 +60,15 @@ const CAM_B = "T8210P0000000002";
 const ACCOUNT_ID = "0000000000000000000000000000000000000000";
 const DID = "XXXXXXX-000000-XXXXX";
 
+const KEYFRAME = {
+  data: Buffer.from("000000016588", "hex"),
+  keyframe: true,
+  codec: "h264",
+  width: 640,
+  height: 480,
+  timestamp: 1,
+};
+
 const events: string[] = [];
 
 function router() {
@@ -226,17 +235,9 @@ describe("a second live camera on a claimed station session", () => {
     const consumer = a.attach() as EventEmitter;
     const stopped = vi.fn();
     consumer.on("stop", stopped);
-    consumer.on("error", () => {});
     const stream = (a as unknown as { stream: EventEmitter }).stream;
     try {
-      stream.emit("video", {
-        data: Buffer.from("000000016588", "hex"),
-        keyframe: true,
-        codec: "h264",
-        width: 640,
-        height: 480,
-        timestamp: 1,
-      });
+      stream.emit("video", KEYFRAME);
       stream.emit("error", new Error("upstream failed"));
       expect(sessionKeys(r).has(`${STATION_SN}:0`)).toBe(false);
       expect(sources(r).get(`${STATION_SN}:0`)).toBe(a);
@@ -267,16 +268,8 @@ describe("a second live camera on a claimed station session", () => {
       expect(sources(r).has(`${STATION_SN}:0`)).toBe(false);
       expect(sources(r).get(`${STATION_SN}:2`)).toBe(b);
       expect(built[1].isConnected).toBe(true);
-      const frame = {
-        data: Buffer.from("000000016588", "hex"),
-        keyframe: true,
-        codec: "h264",
-        width: 640,
-        height: 480,
-        timestamp: 1,
-      };
-      (b as unknown as { stream: EventEmitter }).stream.emit("video", frame);
-      expect(delivered).toHaveBeenCalledWith(frame);
+      (b as unknown as { stream: EventEmitter }).stream.emit("video", KEYFRAME);
+      expect(delivered).toHaveBeenCalledWith(KEYFRAME);
     } finally {
       await r.closeAll();
     }

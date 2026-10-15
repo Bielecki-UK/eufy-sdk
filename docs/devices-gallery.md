@@ -14,8 +14,9 @@ const ICONS = Object.fromEntries(
 );
 
 // Show each tile's photo or its icon. A tile's icon is the first of its model codes that has one; a
-// tile with no icon keeps its photo in both views, and a tile with no photo shows its icon in both. The icon is drawn as a mask over the text colour, so
-// the black line art follows the light and dark theme.
+// tile with no icon keeps its photo in both views, and a tile with no photo shows its icon in both.
+// The icon is drawn as a mask over the text colour, so the black line art follows the light and dark
+// theme.
 function applyView() {
   if (typeof document === "undefined") return;
   document.querySelectorAll(".device-gallery figure").forEach((fig) => {
@@ -122,9 +123,6 @@ from its reported capabilities. See [Devices & capabilities](/devices) for how r
 <figure>
   <img src="/devices/security/security-T8010.webp" alt="HomeBase 2 (S280) T8010" loading="lazy" />
   <figcaption>HomeBase 2 (S280) <span class="model">T8010</span></figcaption>
-</figure>
-<figure>
-  <figcaption>Wi-Fi Doorbell Chime <span class="model">T8020</span></figcaption>
 </figure>
 <figure>
   <img src="/devices/security/security-T8023.webp" alt="MiniBase Chime T8023" loading="lazy" />
@@ -364,8 +362,8 @@ from its reported capabilities. See [Devices & capabilities](/devices) for how r
   <figcaption>PoE Bullet PTZ Cam S4 <span class="model">T8E00</span></figcaption>
 </figure>
 <figure>
-  <img src="/devices/security/security-T8W11C.webp" alt="Indoor Cam C220 T8W11 · T8W11C · T8W11P · T8419N" loading="lazy" />
-  <figcaption>Indoor Cam C220 <span class="model">T8W11 · T8W11C · T8W11P · T8419N</span></figcaption>
+  <img src="/devices/security/security-T8W11C.webp" alt="Indoor Cam C220 T8W11 · T8W11C · T8419N" loading="lazy" />
+  <figcaption>Indoor Cam C220 <span class="model">T8W11 · T8W11C · T8419N</span></figcaption>
 </figure>
 <figure>
   <img src="/devices/security/security-T8401.webp" alt="Solo Indoor Cam C22 T8401" loading="lazy" />

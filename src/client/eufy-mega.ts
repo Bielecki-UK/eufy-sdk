@@ -826,13 +826,24 @@ export class EufyMega extends EventEmitter {
   private recycleStandaloneSession(sn: string): Promise<void> {
     const releaseWrite = new Promise<void>((resolve) => void setTimeout(resolve, SESSION_RECYCLE_WAIT_MS).unref?.());
     return Promise.race([
-      this.p2p.resetStandaloneSession(sn),
+      this.p2p.resetStandaloneSession(sn).finally(() => this.reopenWiredStation(sn)),
       releaseWrite.then(() =>
         this.opts.logger?.debug(
           `[session ${sn}] recycle still waiting on an attached viewer — releasing the write that asked for it`,
         ),
       ),
     ]);
+  }
+
+  /** Reopen a wired station that {@link recycleStandaloneSession} closed, while the generation that warmed it is current. */
+  private reopenWiredStation(sn: string): void {
+    const generation = this.realtimeGeneration;
+    if (generation?.epoch !== this.realtimeEpoch) return;
+    if (this.p2p.stationKeyOf(sn) !== sn || !this.registry.p2pDevices().some((d) => d.sn === sn)) return;
+    if (this.stationPower(sn) !== "wired") return;
+    void this.p2p.ensureStation(sn, generation.abort.signal).catch((error) => {
+      if (!generation.abort.signal.aborted) this.reportError(error);
+    });
   }
 
   /**

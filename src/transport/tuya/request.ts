@@ -235,14 +235,14 @@ export function buildPublishDpsAction(devId: string, gwId: string, dps: Record<s
 }
 
 /**
- * READ/dump: fetch a device's cached data-points. Action `smartlife.m.device.cache.dp.get` v2.0.
- * TODO(verify): `dpCacheType` default (1) was not pinned from the capture.
+ * READ: a device's current data-points. Action `smartlife.m.device.dp.get` v1.0, postData `{ devId }`.
+ * The reply `result` is a flat `{ "<dpId>": value }` map.
  */
-export function buildGetDeviceDpsAction(devId: string, dpCacheType = 1): TuyaAction {
+export function buildGetDeviceDpsAction(devId: string): TuyaAction {
   return {
-    a: "smartlife.m.device.cache.dp.get",
-    v: "2.0",
-    postData: JSON.stringify({ devId, dpCacheType }),
+    a: "smartlife.m.device.dp.get",
+    v: "1.0",
+    postData: JSON.stringify({ devId }),
   };
 }
 

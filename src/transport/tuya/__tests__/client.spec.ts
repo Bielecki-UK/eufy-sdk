@@ -66,14 +66,14 @@ describe("TuyaClient", () => {
     expect(params.sign).toBe("f".repeat(64));
   });
 
-  it("getDeviceDps posts the cache.dp.get action", async () => {
-    const { http, calls } = stubHttp([{ success: true, result: { dps: {} } }]);
+  it("getDeviceDps posts the dp.get action", async () => {
+    const { http, calls } = stubHttp([{ success: true, result: {} }]);
     const c = new TuyaClient({ signer: new FixedSigner(), chKey: "7cbfe6d8", http });
     const res = await c.getDeviceDps("dev-1");
     expect(res.success).toBe(true);
     const body = new URLSearchParams(calls[0].body);
-    expect(body.get("a")).toBe("smartlife.m.device.cache.dp.get");
-    expect(sentPostData(body)).toEqual({ devId: "dev-1", dpCacheType: 1 });
+    expect(body.get("a")).toBe("smartlife.m.device.dp.get");
+    expect(sentPostData(body)).toEqual({ devId: "dev-1" });
   });
 
   it("publishDps refuses to send by default (unverified write gate)", async () => {

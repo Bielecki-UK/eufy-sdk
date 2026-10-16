@@ -31,7 +31,7 @@ import { jpegGeometry } from "../transport/p2p/media.js";
 import type { PowerTier } from "../transport/p2p/session-manager.js";
 import { MqttCommandRouter } from "../transport/mqtt/command-router.js";
 import { TuyaCommandRouter } from "../transport/tuya/command-router.js";
-import { TuyaDpRouter, parseTuyaDpReport } from "../transport/tuya/dp-codec.js";
+import { TuyaDpRouter } from "../transport/tuya/dp-codec.js";
 import { rawDpCodec } from "../transport/raw-dp.js";
 import { resolveLightEffect as resolveLightEffectHttp } from "../transport/http/light-catalog.js";
 import {
@@ -1921,16 +1921,6 @@ export class EufyMega extends EventEmitter {
     transport.on("message", (m) => {
       this.emit("message", m); // raw MQTT message (low-level escape hatch)
       if (m.deviceSn) {
-        const dev = this.registry.list().find((d) => d.sn === m.deviceSn);
-        if (dev?.category === "eufy_home_tuya") {
-          const dps = parseTuyaDpReport(m.raw);
-          if (dps) {
-            this.tuyaDpRouter.deliver(m.deviceSn, dps);
-            return;
-          }
-        }
-      }
-      if (m.deviceSn) {
         // The map stream. A protocol-41 message is nothing else, so it stops here rather than being
         // walked by DP parsers that would each correctly decline it.
         const frame = parseBizMapFrame(m.raw);
@@ -1965,18 +1955,12 @@ export class EufyMega extends EventEmitter {
    * Subscribe the devices on one credential scope; a failing subscribe is reported, not fatal (one
    * unreachable device must not stop the rest of the roster from coming up).
    *
-   * A Tuya clean-line device's DPs are also read from the Tuya cloud, whether or not its subscribe
-   * succeeded: the cloud read is a separate plane, and the broker can refuse a subscribe for a device
-   * whose DPs the Tuya cloud still serves.
+   * A Tuya clean-line device (`eufy_home_tuya`) is not subscribed: its state lives on the Tuya cloud,
+   * and the broker refuses its `eufy_home` topics on every credential. Its DPs are read from the Tuya
+   * cloud instead.
    */
   private async subscribeMqttDevices(scope: MqttScope, transport: SecureMqtt): Promise<void> {
     for (const d of this.getMqttDevices().filter((dev) => mqttScopeFor(dev) === scope)) {
-      try {
-        await transport.subscribeDevice(d);
-        await this.sendRealtimeInit(d.sn);
-      } catch (e) {
-        this.reportError(e);
-      }
       if (d.category === "eufy_home_tuya") {
         this.tuya
           .fetchDps(d.sn)
@@ -1984,6 +1968,13 @@ export class EufyMega extends EventEmitter {
             if (dps) this.tuyaDpRouter.deliver(d.sn, dps);
           })
           .catch((e) => this.reportError(e));
+        continue;
+      }
+      try {
+        await transport.subscribeDevice(d);
+        await this.sendRealtimeInit(d.sn);
+      } catch (e) {
+        this.reportError(e);
       }
     }
   }

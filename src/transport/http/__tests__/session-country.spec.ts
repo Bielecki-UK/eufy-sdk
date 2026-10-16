@@ -42,8 +42,8 @@ describe("stored session country", () => {
     expect(attemptLogin).toHaveBeenCalledOnce();
   });
 
-  it("restores a session logged in with the configured country", async () => {
-    const { mega, attemptLogin } = client(storedSession({ countryCode: "GB" }), "GB");
+  it("restores a session whose country differs only in case", async () => {
+    const { mega, attemptLogin } = client(storedSession({ countryCode: "us" }), "US");
     expect(mega.auth?.authToken).toBe("synthetic-token");
     expect(await mega.login()).toMatchObject({ session: { raw: { restored: true } } });
     expect(attemptLogin).not.toHaveBeenCalled();

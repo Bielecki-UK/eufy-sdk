@@ -422,7 +422,7 @@ export class MegaHttpClient {
   private hydrateFromStore(): string | undefined {
     const saved = this.store.load();
     if (!isSessionValid(saved) || !saved) return undefined;
-    if (saved.countryCode !== undefined && saved.countryCode !== this.cfg.countryCode) {
+    if (saved.countryCode !== undefined && saved.countryCode.toUpperCase() !== this.cfg.countryCode.toUpperCase()) {
       this.logger.info(
         `[mega] stored session was logged in with country ${saved.countryCode}, configured ${this.cfg.countryCode} — logging in again`,
       );

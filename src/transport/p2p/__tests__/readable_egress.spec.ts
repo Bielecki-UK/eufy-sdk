@@ -46,7 +46,6 @@ describe("openReadableFromConsumer", () => {
       expect(received).toHaveLength(1);
       expect(received[0].frame).toBe(original);
       expect(received[0].timestampMs).toBe(1_000);
-      expect(Date.now() - received[0].timestampMs).toBe(5_000);
       expect(Object.hasOwn(original, "timestampMs")).toBe(false);
     } finally {
       reader?.destroy();

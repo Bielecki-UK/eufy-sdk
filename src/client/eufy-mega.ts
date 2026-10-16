@@ -818,7 +818,7 @@ export class EufyMega extends EventEmitter {
    * That wait is unbounded by design — a viewer may watch indefinitely — and it happens INSIDE the keyed
    * transaction, so the next write to the same member queues behind it. Racing it decouples the two: the
    * losing recycle stays pending and still runs when the station falls idle, it just stops gating an
-   * unrelated write. Once the recycle completes, a wired station is reopened by {@link reopenWiredStation}.
+   * unrelated write.
    *
    * A failure reported before the bound propagates; one arriving after it survives only as the session
    * manager's own log, since by then nothing is waiting to receive it.
@@ -826,7 +826,7 @@ export class EufyMega extends EventEmitter {
   private recycleStandaloneSession(sn: string): Promise<void> {
     const releaseWrite = new Promise<void>((resolve) => void setTimeout(resolve, SESSION_RECYCLE_WAIT_MS).unref?.());
     return Promise.race([
-      this.p2p.resetStandaloneSession(sn).then(() => this.reopenWiredStation(sn)),
+      this.p2p.resetStandaloneSession(sn).finally(() => this.reopenWiredStation(sn)),
       releaseWrite.then(() =>
         this.opts.logger?.debug(
           `[session ${sn}] recycle still waiting on an attached viewer — releasing the write that asked for it`,
@@ -835,18 +835,10 @@ export class EufyMega extends EventEmitter {
     ]);
   }
 
-  /**
-   * Reopen the persistent session of a wired P2P station that {@link recycleStandaloneSession} closed,
-   * while the realtime generation that warmed it is current.
-   *
-   * The station set and tier test are {@link warmWiredP2P}'s: a P2P device that is its own station and
-   * whose {@link stationPower} is `"wired"`. A battery station stays closed until an on-demand open.
-   * Unawaited and best-effort; the open is bound to the generation's abort signal, and a failure while
-   * that generation is current surfaces on `error`.
-   */
+  /** Reopen a wired station that {@link recycleStandaloneSession} closed, while the generation that warmed it is current. */
   private reopenWiredStation(sn: string): void {
     const generation = this.realtimeGeneration;
-    if (this.opts.autoRealtime === false || generation?.epoch !== this.realtimeEpoch) return;
+    if (generation?.epoch !== this.realtimeEpoch) return;
     if (this.p2p.stationKeyOf(sn) !== sn || !this.registry.p2pDevices().some((d) => d.sn === sn)) return;
     if (this.stationPower(sn) !== "wired") return;
     void this.p2p.ensureStation(sn, generation.abort.signal).catch((error) => {

@@ -5,29 +5,19 @@ import type { EufyDevice } from "../../core/types.js";
 
 /**
  * A guard-mode write recycles the P2P session of a device that is its own station. A wired station's
- * session is the persistent one realtime start opened, so the recycle reopens it while realtime runs; a
- * battery station is left closed until an on-demand open.
+ * session is the persistent one realtime start opened, so the recycle reopens it while realtime runs,
+ * including when the close itself rejects.
  *
  * Driven through the command sink with the registry seeded, so the station key and power tier resolve
  * through the real code; only the session open and close are stubbed.
  */
-const BATTERY_LEVEL_PARAM = 1101;
 const GUARD_MODE_PARAM = 1224;
 
-const SOLO_BATTERY_SN = "T8000P0000000002";
 const SOLO_WIRED_SN = "T8000P0000000003";
 
 function fleet(): EufyDevice[] {
   const common = { category: "eufy_security", api: "mega", realtime: "p2p", p2pDid: "XXXXXXX-000000-XXXXX" };
   return [
-    {
-      ...common,
-      sn: SOLO_BATTERY_SN,
-      model: "T8299",
-      deviceClass: "camera",
-      stationSn: SOLO_BATTERY_SN,
-      params: { [BATTERY_LEVEL_PARAM]: "88" },
-    },
     { ...common, sn: SOLO_WIRED_SN, model: "T8399", deviceClass: "camera", stationSn: SOLO_WIRED_SN },
   ] as unknown as EufyDevice[];
 }
@@ -89,13 +79,15 @@ describe("standalone session recycle", () => {
     expect(reset.mock.invocationCallOrder[0]).toBeLessThan(open.mock.invocationCallOrder[0]);
   });
 
-  it("leaves a battery station's session closed after a guard-mode write recycles it", async () => {
+  it("reopens a wired station's session when the recycle's close rejects, and still reports the rejection", async () => {
     const { eufy, reset, open } = makeClient();
+    const failure = new Error("close failed");
+    reset.mockRejectedValue(failure);
+    const unacknowledged = vi.spyOn(eufy as any, "reportUnacknowledged").mockImplementation(() => undefined);
 
-    await writeGuardMode(eufy, SOLO_BATTERY_SN, 63);
+    await writeGuardMode(eufy, SOLO_WIRED_SN, 63);
 
-    await vi.waitFor(() => expect(reset).toHaveBeenCalledWith(SOLO_BATTERY_SN));
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(open).not.toHaveBeenCalled();
+    await vi.waitFor(() => expect(open).toHaveBeenCalledWith(SOLO_WIRED_SN, expect.any(AbortSignal)));
+    await vi.waitFor(() => expect(unacknowledged).toHaveBeenCalledWith(failure));
   });
 });

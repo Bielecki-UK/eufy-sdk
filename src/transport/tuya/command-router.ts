@@ -109,7 +109,7 @@ export class TuyaCommandRouter {
   }
 
   /**
-   * Fetch a device's cached DPs from the Tuya cloud (`thing.m.device.cache.dp.get`) and deliver
+   * Fetch a device's cached DPs from the Tuya cloud (`smartlife.m.device.cache.dp.get`) and deliver
    * the raw DP map to the caller. Used for initial state hydration after MQTT subscribe — gets the
    * last-known state without waiting for the first realtime push.
    *

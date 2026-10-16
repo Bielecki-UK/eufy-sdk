@@ -296,6 +296,32 @@ describe("doorbell — confirmed against real T8214", () => {
     expect(r.name).toBe("Video Doorbell Dual");
   });
 
+  it("marks each manifest property with whether the device has reported it", () => {
+    const r = resolveDevice({ model: "T8113", deviceType: 1, params: { 1101: "80" } });
+    const spec = (name: string) => r.properties.find((p) => p.name === name);
+    expect(spec("battery")?.reported).toBe(true);
+    expect(spec("soloSensitivity")?.reported).toBe(false);
+    expect(spec("solarIntensity")?.reported).toBe(false);
+  });
+
+  it("flips a property to reported once a fresher record carries its param", () => {
+    const dev = Device.fromRecord("T8113R", { model: "T8113", deviceType: 1, params: { 1101: "80" } });
+    expect(dev.properties.find((p) => p.name === "solarIntensity")?.reported).toBe(false);
+    dev.reresolve({ model: "T8113", deviceType: 1, params: { 1101: "80", 1309: "3" } });
+    expect(dev.properties.find((p) => p.name === "solarIntensity")?.reported).toBe(true);
+  });
+
+  it("flags a realtime member reported only once its value arrives, keeping its getter before that", () => {
+    const record = { model: "T8L02", category: "eufy_life", params: {} };
+    const dev = Device.fromRecord("T8L02R", record);
+    expect(dev.properties.find((p) => p.name === "lightPower")?.reported).toBe(false);
+    dev.bindActions(
+      { codec: "light", model: "T8L02", category: "eufy_life", channel: 0, paramIds: new Set<number>() },
+      { dispatch: async () => {} },
+    );
+    expect("power" in (dev.smartLight?.() ?? {})).toBe(true);
+  });
+
   it("types the T8210C variant as a doorbell, like the T8210", () => {
     const r = resolveDevice({ model: "T8210C", deviceType: 7 });
     expect(r.capabilities).toContain("doorbell");

@@ -203,6 +203,11 @@ export interface PropertySpec {
   kind?: ValueKind;
   /** Whether the value can be written back to the device (a setter exists). */
   writable: boolean;
+  /**
+   * Whether the device has reported this value: its own param, a read alias, or the payload it reads
+   * from. `false` means it never has. Absent when the manifest was built without the device's params.
+   */
+  reported?: boolean;
   /** Allowed values for `type: "enum"` (raw → label). */
   enumValues?: Record<number, string>;
   /**

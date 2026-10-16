@@ -354,7 +354,7 @@ export class MegaHttpClient {
   /**
    * An autonomous re-login came back needing a captcha or a 2FA code, which only a login driven from outside
    * can answer. Kept apart from {@link pending2fa} because {@link clearSession} resets that one when the
-   * limited token is rejected; cleared only by a login that completes.
+   * limited token is rejected; cleared by a login that completes or a session adopted from the store.
    */
   private reloginChallenged = false;
   private tokenExpiresAt = 0;
@@ -419,6 +419,7 @@ export class MegaHttpClient {
    *
    * Read at construction, and again when a rejection is being recovered from — a store SHARED with another
    * client may already hold the session that client obtained, which is cheaper to adopt than to compete with.
+   * An adopted session is a complete one, so it ends any 2FA or challenged re-login this client was left with.
    *
    * Note: the device identity (openudid + phone model + media UA) is NOT restored here — it is resolved once
    * in the constructor, where an explicit config wins over the stored value, and must not be re-derived from a
@@ -436,6 +437,8 @@ export class MegaHttpClient {
       geoKey: saved.geoKey,
     };
     this.tokenExpiresAt = saved.tokenExpiresAt;
+    this.pending2fa = false;
+    this.reloginChallenged = false;
     this.sessionKey = {
       keyIdent: saved.keyIdent,
       shareKey: saved.shareKey,
@@ -1253,8 +1256,8 @@ export class MegaHttpClient {
    * maintained alongside every request the login flow makes. A 2FA code already outstanding is a login a human
    * is part-way through, and restarting it silently would discard it. A re-login that already came back needing
    * a captcha or a 2FA code would need the same again, and each attempt sends the account another code, so
-   * none is tried until a login completes. No credentials means nothing to try, so the rejection surfaces
-   * instead.
+   * none is tried until a login completes or a stored session is adopted. No credentials means nothing to try,
+   * so the rejection surfaces instead.
    */
   private canReauthenticate(): boolean {
     return !!this.cfg.email && !!this.cfg.password && !this.loggingIn && !this.pending2fa && !this.reloginChallenged;

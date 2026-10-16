@@ -308,6 +308,57 @@ describe("mega authenticated session rejection", () => {
     expect(logins).toHaveLength(4); // a rejection after the verified login recovers on its own again
   });
 
+  /**
+   * The other way a challenged re-login ends: another client on a shared store completes its login, and this
+   * client adopts that session. The adopted session is a working one, so its own later rejection is recovered
+   * by a login like any other.
+   */
+  it("recovers by itself again once it adopts a stored session after a 2FA re-login", async () => {
+    vi.useFakeTimers();
+    const mega = new MegaHttpClient({ email: "synthetic@example.invalid", password: "synthetic", region: "us-pr" });
+    const store = sharedStore("unused");
+    store.held = null;
+    const internals = mega as unknown as {
+      ensureSessionKey: () => Promise<{ shareKey: string; keyIdent: string }>;
+      httpPost: (url: string, body: unknown, headers: Record<string, string>) => Promise<Response>;
+      store: SessionStore;
+    };
+    internals.store = store;
+    internals.ensureSessionKey = vi.fn(async () => ({ shareKey: "00".repeat(32), keyIdent: "00".repeat(16) }));
+    const logins: string[] = [];
+    let adoptedWorks = true;
+    internals.httpPost = vi.fn(async (url: string, _body: unknown, headers: Record<string, string>) => {
+      if (url.includes("/verify_code")) return OK;
+      if (url.includes("/passport/login")) {
+        logins.push(url);
+        const data = {
+          user_id: "synthetic-user",
+          ap_cloud_user_id: "synthetic-user",
+          auth_token: `synthetic-token-${logins.length}`,
+          token_expires_at: 0,
+        };
+        return {
+          status: 200,
+          data: { code: 0, data: logins.length === 1 ? { ...data, fa_info: { info: "x" } } : data },
+        };
+      }
+      const token = headers["x-auth-token"];
+      if (token === "synthetic-token-2" || (token === "token-b" && adoptedWorks)) return OK;
+      return KICKED;
+    });
+
+    await expect(call(mega)).rejects.toBeInstanceOf(SessionExpiredError);
+    expect(logins).toHaveLength(1); // the recovery login, answered with 2FA
+
+    store.held = storedSession("token-b"); // another client on the store completed its login
+    await expect(call(mega)).resolves.toEqual({ ok: true }); // adopted
+
+    adoptedWorks = false;
+    await vi.advanceTimersByTimeAsync(31 * 60_000);
+    await expect(call(mega)).resolves.toEqual({ ok: true });
+    expect(logins).toHaveLength(2); // the adopted session's rejection is recovered by a login of its own
+  });
+
   /** With no credentials to log in with — a host running purely off a restored session — there is nothing to try. */
   it("does not attempt a re-login it has no credentials for", async () => {
     const mega = new MegaHttpClient({ email: "", password: "" });

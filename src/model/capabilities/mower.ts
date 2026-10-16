@@ -5,8 +5,8 @@ import type { CapabilityModule } from "./types.js";
 /**
  * Robot-mower Tuya **DP ids** — the E15's Tuya product schema (`thing.m.device.ref.info.list` v5.4,
  * `schemaInfo.schema`, product `bvxrcjxom787vnit`), each id also reported by a live E15. The product
- * is built on Tuya's robot-vacuum template, so ids 1-42 carry that template's codes; the mower's own
- * data points are 101-146.
+ * is built on Tuya's robot-vacuum template, so ids below 101 carry that template's codes; the mower's
+ * own data points are 101-146.
  *
  * Only scalar data points are named here. The Raw ones (`robot_status` 107, `battery_status` 108,
  * `map_info` 113, the `*_control` commands 103-106, …) are protobuf messages whose field layout no

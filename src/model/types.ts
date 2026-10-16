@@ -173,7 +173,8 @@ export function isKnownValueKind(kind: ValueKind): kind is KnownValueKind {
 /**
  * How much a param's name and meaning can be trusted, most-trusted first. This is the one definition;
  * the param dictionary and every `provenance` field use it.
- *  - `mega`     — the vendor's cloud names it: its data-point catalog (`get_product_data_point`), or a
+ *  - `mega`     — the vendor's cloud names it: its data-point catalog (`get_product_data_point`), the
+ *                 Tuya product schema of an `eufy_home_tuya` device (`thing.m.device.ref.info.list`), or a
  *                 reported value that matches what the cloud record already says (a model name or code).
  *  - `verified` — confirmed on a real device by this project: our own capture or observation, or
  *                 identified by someone who has the hardware.

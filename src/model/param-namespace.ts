@@ -46,7 +46,7 @@ export function paramDef(ns: ParamNamespace, paramType: number): ParamDef | unde
  * mislabelling the security battery id on a device where it means nothing).
  *
  * `mower` is a Clean-line device but reads its OWN namespace: its Tuya product schema numbers its data
- * points on Tuya's robot-vacuum template (ids 1-42) plus its own ids 101-146, with meanings unrelated
+ * points on Tuya's robot-vacuum template (ids below 101) plus its own ids 101-146, with meanings unrelated
  * to a vacuum's (DP 110 is a mower's cutting height and a Tuya vacuum's session area), so reading them
  * against `CLEAN_PARAMS` would name one product's state with the other's dictionary.
  *

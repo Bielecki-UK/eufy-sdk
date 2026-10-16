@@ -119,6 +119,7 @@ import type { DisplayActions } from "./display.js";
 import type { SuctionActions } from "./suction.js";
 import type { LocateActions } from "./locate.js";
 import type { DeviceInfo } from "./info.js";
+import type { CusPushAlarmType } from "../push-events.js";
 
 /** Every capability module, in a stable order (governs `mergeProperties`/`buildCommand` precedence). */
 const MODULES: CapabilityModule[] = [
@@ -687,8 +688,11 @@ export interface DeviceEventMap {
    * can be known about a value nothing pushes.
    */
   cameraEnabledChanged: PushSemanticEvent;
-  /** Station alarm lifecycle; `phase` says whether it fired or is counting down. */
-  alarm: PushSemanticEvent & { phase?: "triggered" | "delayed" };
+  /**
+   * Station alarm lifecycle; `phase` says whether it fired, is counting down, or was stopped. `type` is
+   * the push's alarm source or stop reason, absent when the push carried none.
+   */
+  alarm: PushSemanticEvent & { phase?: "triggered" | "delayed" | "stopped"; type?: CusPushAlarmType };
   /** Lock (un)locked or a lock alarm fired. */
   lockState: PushSemanticEvent;
   /**

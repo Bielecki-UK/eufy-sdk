@@ -125,6 +125,9 @@ from its reported capabilities. See [Devices & capabilities](/devices) for how r
   <figcaption>HomeBase 2 (S280) <span class="model">T8010</span></figcaption>
 </figure>
 <figure>
+  <figcaption>Wi-Fi Doorbell Chime <span class="model">T8020</span></figcaption>
+</figure>
+<figure>
   <img src="/devices/security/security-T8023.webp" alt="MiniBase Chime T8023" loading="lazy" />
   <figcaption>MiniBase Chime <span class="model">T8023</span></figcaption>
 </figure>

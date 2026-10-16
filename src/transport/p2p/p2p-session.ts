@@ -457,7 +457,10 @@ export class P2PSession extends EventEmitter {
    * In-flight multi-datagram frame per data channel (see reassemble): the payload gathered so far under its
    * parsed header, or, without a header, the start of a frame header cut by the datagram boundary.
    */
-  private readonly pendingByDataType = new Map<number, { header?: P2PDataFrameHeader; buf: Buffer }>();
+  private readonly pendingByDataType = new Map<
+    number,
+    { header?: P2PDataFrameHeader; chunks: Buffer[]; byteLength: number }
+  >();
   /** Last delivered datagram sequence number per data type. */
   private readonly lastSeqByType = new Map<number, number>();
   /** Held datagrams and their active gap timer, grouped by data type. */
@@ -2104,29 +2107,30 @@ export class P2PSession extends EventEmitter {
    * Frames are packed back to back, so a frame header can itself be cut by a datagram boundary. The start
    * of a header left at the end of a datagram is carried into the next one rather than discarded; dropping
    * it would lose that frame and every frame after it until a datagram happened to begin on a header.
+   * Payload fragments retain their original slices and are copied once, when the complete frame is delivered.
    */
   private reassemble(dataType: number, datagramBody: Buffer): void {
     const pending = this.pendingByDataType.get(dataType);
-    let body = pending ? Buffer.concat([pending.buf, datagramBody]) : datagramBody;
-    const carryHeader = pending?.header;
     this.pendingByDataType.delete(dataType);
+    let body = pending && !pending.header ? Buffer.concat([...pending.chunks, datagramBody]) : datagramBody;
 
-    if (carryHeader) {
-      // continuing a frame: we have header already; body is the accumulated payload
-      if (body.length < carryHeader.bytesToRead) {
-        this.pendingByDataType.set(dataType, { header: carryHeader, buf: body });
+    if (pending?.header) {
+      const taken = Math.min(pending.header.bytesToRead - pending.byteLength, body.length);
+      pending.chunks.push(body.subarray(0, taken));
+      pending.byteLength += taken;
+      body = body.subarray(taken);
+      if (pending.byteLength < pending.header.bytesToRead) {
+        this.pendingByDataType.set(dataType, pending);
         return;
       }
-      this.handleFrame(carryHeader, body.subarray(0, carryHeader.bytesToRead), dataType);
-      body = body.subarray(carryHeader.bytesToRead);
+      this.handleFrame(pending.header, Buffer.concat(pending.chunks, pending.byteLength), dataType);
     }
 
     while (body.length >= P2P_DATA_HEADER_BYTES && body.subarray(0, 4).toString() === MAGIC_WORD) {
       const header = parseDataFrameHeader(body);
       const payload = body.subarray(P2P_DATA_HEADER_BYTES);
       if (payload.length < header.bytesToRead) {
-        // frame spans into following datagram(s) — stash and wait
-        this.pendingByDataType.set(dataType, { header, buf: payload });
+        this.pendingByDataType.set(dataType, { header, chunks: [payload], byteLength: payload.length });
         return;
       }
       this.handleFrame(header, payload.subarray(0, header.bytesToRead), dataType);
@@ -2137,7 +2141,7 @@ export class P2PSession extends EventEmitter {
       body.length < P2P_DATA_HEADER_BYTES &&
       MAGIC_WORD.startsWith(body.subarray(0, 4).toString())
     ) {
-      this.pendingByDataType.set(dataType, { buf: body });
+      this.pendingByDataType.set(dataType, { chunks: [body], byteLength: body.length });
     }
   }
 

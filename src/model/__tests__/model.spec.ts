@@ -147,6 +147,15 @@ describe("resolveDevice — 3-tier composition", () => {
     expect(resolveDevice({ deviceType: 46 }).capabilities).not.toContain("ptz");
   });
 
+  it.each([undefined, DeviceType.CAMERA_POE_S4])(
+    "recognizes PoE S4 pan-tilt without reported preset parameters (device type %s)",
+    (deviceType) => {
+      expect(
+        resolveDevice({ model: "T8E00", category: "eufy_security", deviceType, params: {} }).capabilities,
+      ).toContain("ptz");
+    },
+  );
+
   it("a normal solar cam (T8124R) is NOT pan-tilt — the mistaken model hint is gone", () => {
     // T8124R (deviceType 62 = SOLO_CAMERA_SPOTLIGHT_SOLAR) is a FIXED solar cam: it reports no PT param
     // and isn't a PT deviceType. An unfounded `\bT8124R\b` model hint used to grant it ptz anyway;
@@ -291,6 +300,12 @@ describe("doorbell — confirmed against real T8214", () => {
     const r = resolveDevice({ model: "T8210C", deviceType: 7 });
     expect(r.capabilities).toContain("doorbell");
     expect(r.name).toBe("Video Doorbell");
+  });
+
+  it("names the T8354 Baby Monitor E21", () => {
+    const r = resolveDevice({ model: "T8354", deviceType: 86 });
+    expect(r.source).toBe("model");
+    expect(r.name).toBe("Baby Monitor E21");
   });
 
   it("decodes real doorbell param values (chime on, ringtone vol 80, notification JSON)", () => {

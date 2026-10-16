@@ -76,7 +76,7 @@ import {
   type DeviceInspection,
   type RawParams,
 } from "../model/index.js";
-import { isHomeBase, isNvrT8N00, isStation9000 } from "../model/device-family.js";
+import { isHomeBase, isNvrT8N00, isStation9000, isTuyaVacuum } from "../model/device-family.js";
 import { cameraPowerTier } from "../model/capabilities/battery.js";
 import { DeviceRegistry, type DeviceRecord, type ParamChange } from "./device-registry.js";
 import type {
@@ -540,7 +540,8 @@ export class EufyMega extends EventEmitter {
    *
    * Skipped entirely for a device with a pollable cloud record, for an already-reporting device, and
    * when realtime is off — so the common path adds nothing. Resolving on timeout leaves a silent device
-   * read-less rather than failing the lookup.
+   * read-less rather than failing the lookup. A Tuya clean-line device waits on the Tuya cloud read the
+   * bring-up started, so no broker is brought up for it.
    */
   private async awaitFirstRealtimeState(sn: string): Promise<void> {
     if (this.opts.autoRealtime === false || this.realtimeGeneration?.epoch !== this.realtimeEpoch) return;
@@ -552,10 +553,12 @@ export class EufyMega extends EventEmitter {
     if (!dev || dev.realtime !== "smqtt") return;
     const caps = this.registry.capabilitiesForDevice(sn);
     if (!caps || !hasRealtimeReads(caps)) return;
-    try {
-      await this.ensureMqttStarted(mqttScopeFor(dev));
-    } catch {
-      return;
+    if (!isTuyaVacuum(dev)) {
+      try {
+        await this.ensureMqttStarted(mqttScopeFor(dev));
+      } catch {
+        return;
+      }
     }
     await this.registry.awaitRealtimeState(sn, timeoutMs);
   }
@@ -667,9 +670,34 @@ export class EufyMega extends EventEmitter {
     }
   }
 
-  /** The distinct credential scopes the current MQTT roster needs — no devices on a scope, no connection. */
+  /**
+   * The distinct credential scopes the current MQTT roster needs — no devices on a scope, no connection.
+   * A Tuya clean-line device (`eufy_home_tuya`) needs none: the broker refuses its topics, and its state
+   * is read from the Tuya cloud.
+   */
   private mqttScopesInUse(): MqttScope[] {
-    return [...new Set(this.getMqttDevices().map(mqttScopeFor))];
+    return [
+      ...new Set(
+        this.getMqttDevices()
+          .filter((d) => !isTuyaVacuum(d))
+          .map(mqttScopeFor),
+      ),
+    ];
+  }
+
+  /**
+   * Read every Tuya clean-line device's DPs from the Tuya cloud and deliver them as realtime state. A
+   * failed read is reported, not fatal, and leaves that device's state as it was.
+   */
+  private readTuyaDevices(): void {
+    for (const d of this.getMqttDevices().filter(isTuyaVacuum)) {
+      this.tuya
+        .fetchDps(d.sn)
+        .then((dps) => {
+          if (dps) this.tuyaDpRouter.deliver(d.sn, dps);
+        })
+        .catch((e) => this.reportError(e));
+    }
   }
 
   /**
@@ -1194,7 +1222,7 @@ export class EufyMega extends EventEmitter {
     }
     if (cmd.kind === "aiot-dp") {
       const dev = this.registry.require(sn);
-      if (dev.category === "eufy_home_tuya") return this.tuya.dispatchCommand(sn, cmd);
+      if (isTuyaVacuum(dev)) return this.tuya.dispatchCommand(sn, cmd);
       return this.mqtt.dispatchCommand(sn, cmd);
     }
     const route = this.rtcRouteFor(sn);
@@ -1251,7 +1279,7 @@ export class EufyMega extends EventEmitter {
   async getDevices(): Promise<EufyDevice[]> {
     const devices = await this.registry.getDevices();
     for (const dev of devices) {
-      if (dev.category !== "eufy_home_tuya") continue;
+      if (!isTuyaVacuum(dev)) continue;
       const raw = (dev.raw ?? {}) as Record<string, unknown>;
       this.tuya.registerDevice(dev.sn, tuyaDevIdFrom(raw) ?? dev.sn);
     }
@@ -1437,6 +1465,7 @@ export class EufyMega extends EventEmitter {
     try {
       if (!this.registry.list().length) await this.getDevices();
       if (epoch !== this.realtimeEpoch) return this.settleRealtimeGeneration(generation, "superseded");
+      this.readTuyaDevices();
       const scopes = this.mqttScopesInUse();
       readiness.mqtt = createPlaneReadiness(scopes.length);
       let push: PushClient | undefined;
@@ -1956,20 +1985,10 @@ export class EufyMega extends EventEmitter {
    * unreachable device must not stop the rest of the roster from coming up).
    *
    * A Tuya clean-line device (`eufy_home_tuya`) is not subscribed: its state lives on the Tuya cloud,
-   * and the broker refuses its `eufy_home` topics on every credential. Its DPs are read from the Tuya
-   * cloud instead.
+   * and the broker refuses its `eufy_home` topics on every credential.
    */
   private async subscribeMqttDevices(scope: MqttScope, transport: SecureMqtt): Promise<void> {
-    for (const d of this.getMqttDevices().filter((dev) => mqttScopeFor(dev) === scope)) {
-      if (d.category === "eufy_home_tuya") {
-        this.tuya
-          .fetchDps(d.sn)
-          .then((dps) => {
-            if (dps) this.tuyaDpRouter.deliver(d.sn, dps);
-          })
-          .catch((e) => this.reportError(e));
-        continue;
-      }
+    for (const d of this.getMqttDevices().filter((dev) => !isTuyaVacuum(dev) && mqttScopeFor(dev) === scope)) {
       try {
         await transport.subscribeDevice(d);
         await this.sendRealtimeInit(d.sn);

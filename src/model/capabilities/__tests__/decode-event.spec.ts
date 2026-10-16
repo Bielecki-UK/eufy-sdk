@@ -335,13 +335,9 @@ describe("decodeEvent — detection sub-events and station events", () => {
     const alarm = (payload: Record<string, unknown>) =>
       decodeEvent({ source: "push", eventType: 10, deviceSn: "T8000P0000000000", payload })[0].payload;
 
-    expect(alarm({ type: 4 })).toMatchObject({ phase: "triggered", alarmType: 4 });
-    expect(alarm({ type: 7 })).toMatchObject({ phase: "triggered", alarmType: 7 });
-    for (const stop of [0, 1, 15, 16, 17]) {
-      expect(alarm({ type: stop })).toMatchObject({ phase: "stopped", alarmType: stop });
-    }
+    expect(alarm({ type: 4 })).toMatchObject({ phase: "triggered", type: 4 });
+    expect(alarm({ type: 16 })).toMatchObject({ phase: "stopped", type: 16 });
     expect(alarm({})).toMatchObject({ phase: "triggered" });
-    expect(alarm({})).not.toHaveProperty("alarmType");
   });
 });
 

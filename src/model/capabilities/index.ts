@@ -689,10 +689,10 @@ export interface DeviceEventMap {
    */
   cameraEnabledChanged: PushSemanticEvent;
   /**
-   * Station alarm lifecycle; `phase` says whether it fired, is counting down, or was stopped. `alarmType`
-   * is the push's alarm source or stop reason, absent when the push carried none.
+   * Station alarm lifecycle; `phase` says whether it fired, is counting down, or was stopped. `type` is
+   * the push's alarm source or stop reason, absent when the push carried none.
    */
-  alarm: PushSemanticEvent & { phase?: "triggered" | "delayed" | "stopped"; alarmType?: CusPushAlarmType };
+  alarm: PushSemanticEvent & { phase?: "triggered" | "delayed" | "stopped"; type?: CusPushAlarmType };
   /** Lock (un)locked or a lock alarm fired. */
   lockState: PushSemanticEvent;
   /**

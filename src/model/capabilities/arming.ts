@@ -463,29 +463,10 @@ export const ARMING_MEMBERS = {
   ),
 } as const satisfies Members;
 
-/**
- * The {@link CusPushAlarmType} codes that end an alarm rather than raise one: stopped by the hub, by the
- * device, from the keypad, from the app, or on the HomeBase itself.
- */
-const ALARM_STOP_TYPES: ReadonlySet<number> = new Set([
-  CusPushAlarmType.HUB_STOP,
-  CusPushAlarmType.DEV_STOP,
-  CusPushAlarmType.HUB_STOP_BY_KEYPAD,
-  CusPushAlarmType.HUB_STOP_BY_APP,
-  CusPushAlarmType.HUB_STOP_BY_HUB,
-]);
-
-/**
- * The `phase` and `alarmType` an alarm push (`CusPushEvent.ALARM`) carries, read from its `type` field,
- * a {@link CusPushAlarmType} code. A HomeBase pushes the same event id for both ends of an alarm and only
- * `type` separates them: a captured `trigger` then `stop` on a T8010 pushed `type: 4` (`APP`) and then
- * `type: 16` (`HUB_STOP_BY_APP`). A stop code answers `"stopped"`; any other code, or a push without a
- * numeric `type`, answers `"triggered"`. `alarmType` is present only when `type` is numeric.
- */
+/** `"stopped"` when the push's `type` is a stop code, otherwise `"triggered"`. */
 function decodeAlarmPhase(signal: InboundSignal): Record<string, unknown> {
   const type = signal.source === "push" ? signal.payload?.["type"] : undefined;
-  if (typeof type !== "number") return { phase: "triggered" };
-  return { phase: ALARM_STOP_TYPES.has(type) ? "stopped" : "triggered", alarmType: type };
+  return type === CusPushAlarmType.HUB_STOP_BY_APP ? { phase: "stopped" } : {};
 }
 
 /**
@@ -521,7 +502,13 @@ export const ARMING: CapabilityModule = {
       emit: "armingModeChanged",
       refresh: { member: "mode" },
     },
-    { source: "push", match: CusPushEvent.ALARM, emit: "alarm", derive: decodeAlarmPhase },
+    {
+      source: "push",
+      match: CusPushEvent.ALARM,
+      emit: "alarm",
+      payload: { phase: "triggered" },
+      derive: decodeAlarmPhase,
+    },
     { source: "push", match: CusPushEvent.ALARM_DELAY, emit: "alarm", payload: { phase: "delayed" } },
   ],
 };

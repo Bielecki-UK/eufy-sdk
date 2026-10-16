@@ -504,7 +504,7 @@ export interface CommandSink {
 }
 
 /**
- * Inbound Tuya DP event contract — the transport parses a ThingClips MQTT payload
+ * Inbound Tuya DP event contract — the transport parses the Tuya cloud DP read
  * (string-keyed object → numeric-keyed record) and delivers it through this interface. The
  * transport owns the parse; a capability owns the semantics (which DP id means what). Mirrors
  * {@link DpInboundFrame} for the AIoT MQTT path; the capability layer never names the Tuya framing.

@@ -79,6 +79,8 @@ export const MODEL_REGISTRY: Readonly<Record<string, RegistryEntry>> = {
   // shows a parent, so an attached cam never advertises the hub's guard mode.
   T8170: { codec: "camera", caps: ["battery", "arming"], name: "SoloCam" },
   T8171: { codec: "camera", caps: ["battery", "arming"], name: "T8171" },
+  // Baby Monitor E21, vendor deviceType 86 (category eufy_care), standalone.
+  T8354: { codec: "camera", name: "Baby Monitor E21" },
   T8400: { codec: "camera", caps: ["arming"], name: "Indoor Cam" },
   T8410: { codec: "camera", caps: ["arming"], name: "Indoor Cam Pan & Tilt" },
   T8442: { codec: "camera", caps: ["arming"], name: "Indoor/Outdoor Cam 1080p" },

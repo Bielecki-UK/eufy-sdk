@@ -19,7 +19,7 @@ import type { LiveVideoFrame, ReceivedVideoFrame } from "../../core/contracts.js
 export interface ReadableEgressOptions {
   /** Emit {@link LiveVideoFrame} objects instead of raw Annex-B bytes (default false = bytes). */
   objectMode?: boolean;
-  /** Yield frozen ReceivedVideoFrame envelopes with original receipts; requires objectMode. */
+  /** Yield ReceivedVideoFrame envelopes with original source-arrival times; requires objectMode. */
   receiptMetadata?: boolean;
   /** Readable highWaterMark (bytes, or object count in objectMode). */
   highWaterMark?: number;
@@ -54,7 +54,7 @@ export function openReadableFromConsumer(consumer: Consumer, opts: ReadableEgres
   if (objectMode && opts.receiptMetadata) {
     consumer.onMedia((item) => {
       if (item.kind !== "video") return;
-      const received: ReceivedVideoFrame = Object.freeze({ frame: item.frame, receipt: item.receipt! });
+      const received: ReceivedVideoFrame = { frame: item.frame, timestampMs: item.timestampMs };
       if (!readable.push(received)) consumer.pause();
     });
     consumer.on("video", () => {});

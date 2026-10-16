@@ -3,7 +3,7 @@ import { Readable } from "node:stream";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { LiveStreamHandle, LiveVideoFrame, ReceivedVideoFrame } from "../../../core/contracts.js";
 import { openReadableFromConsumer } from "../readable-egress.js";
-import { SharedLiveSource, type TimedMediaFrame } from "../shared-live-source.js";
+import { SharedLiveSource } from "../shared-live-source.js";
 
 class ReceiptStream extends EventEmitter implements LiveStreamHandle {
   start(): this {
@@ -19,15 +19,12 @@ class ReceiptStream extends EventEmitter implements LiveStreamHandle {
 const sources: SharedLiveSource[] = [];
 const readers: Readable[] = [];
 
-/** Synthetic clocks with independent wall corrections and process-monotonic progress. */
+/** Controlled wall clock for original arrival and delayed delivery. */
 function clocks() {
   let wall = 1_000;
-  let mono = 1_000_000n;
   vi.spyOn(Date, "now").mockImplementation(() => wall);
-  vi.spyOn(process.hrtime, "bigint").mockImplementation(() => mono * 1_000n);
   return {
-    set(nextMono: bigint, nextWall = wall) {
-      mono = nextMono;
+    set(nextWall: number) {
       wall = nextWall;
     },
   };
@@ -67,19 +64,15 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe("original media receipt through video Readable", () => {
-  it("preserves the same aged prime receipt rather than minting delivery time or identity", async () => {
+describe("original media arrival time through video Readable", () => {
+  it("preserves the original arrival time when replaying an aged keyframe", async () => {
     const clock = clocks();
     const { source, stream } = harness();
     const original = frame();
     const first = source.attach();
-    let retained: Extract<TimedMediaFrame, { kind: "video" }> | undefined;
-    first.onMedia((item) => {
-      if (item.kind === "video") retained = item;
-    });
     stream.video(original);
     first.detach();
-    clock.set(6_000_000n, 6_000);
+    clock.set(6_000);
     const reused = source.attach();
     const received: ReceivedVideoFrame[] = [];
     const reader = track(openReadableFromConsumer(reused, { objectMode: true, receiptMetadata: true }));
@@ -87,16 +80,9 @@ describe("original media receipt through video Readable", () => {
     await flush();
     expect(received).toHaveLength(1);
     expect(received[0].frame).toBe(original);
-    expect(received[0].receipt).toBe(retained!.receipt);
-    expect(received[0].receipt.monotonicUs).toBe(1_000_000n);
-    expect(6_000_000n - received[0].receipt.monotonicUs).toBe(5_000_000n);
-    expect(received[0].receipt.sequence).toBe(1n);
-    expect(Object.isFrozen(received[0].receipt)).toBe(true);
-    expect(Object.getOwnPropertyDescriptor(retained!, "receipt")?.writable).toBe(false);
-    expect(Object.keys(retained!)).not.toContain("receipt");
-    expect(() => JSON.stringify(retained!)).not.toThrow();
-    expect(Object.isFrozen(received[0])).toBe(true);
-    expect(Object.hasOwn(original, "receipt")).toBe(false);
+    expect(received[0].timestampMs).toBe(1_000);
+    expect(Date.now() - received[0].timestampMs).toBe(5_000);
+    expect(Object.hasOwn(original, "timestampMs")).toBe(false);
   });
 
   it("preserves original arrival order and codec/configuration under Readable backpressure", async () => {
@@ -110,27 +96,25 @@ describe("original media receipt through video Readable", () => {
     );
     const values = [frame(), frame(false), frame(true, "h265", 1280)];
     stream.video(values[0]);
-    clock.set(2_000_000n, 2_000);
+    clock.set(2_000);
     stream.video(values[1]);
-    clock.set(3_000_000n, 3_000);
+    clock.set(3_000);
     stream.video(values[2]);
     expect(reader.readableLength).toBe(1);
-    clock.set(9_000_000n, 9_000);
+    clock.set(9_000);
     const received: ReceivedVideoFrame[] = [];
     reader.on("data", (value) => received.push(value));
     await flush();
     expect(received.map((value) => value.frame)).toEqual(values);
     values.forEach((value, i) => expect(received[i].frame).toBe(value));
-    expect(received.map((value) => value.receipt.monotonicUs)).toEqual([1_000_000n, 2_000_000n, 3_000_000n]);
-    expect(received.map((value) => value.receipt.sequence)).toEqual([1n, 2n, 3n]);
-    expect(new Set(received.map((value) => value.receipt.sourceId)).size).toBe(1);
+    expect(received.map((value) => value.timestampMs)).toEqual([1_000, 2_000, 3_000]);
     expect(configs).toEqual([
       { codec: "h264", width: 640, height: 360 },
       { codec: "h265", width: 1280, height: 360 },
     ]);
   });
 
-  it("keeps overflow drop-to-keyframe semantics and the surviving original receipts", async () => {
+  it("keeps overflow drop-to-keyframe semantics and the surviving original arrival times", async () => {
     const clock = clocks();
     const { source, stream } = harness(2);
     const consumer = source.attach();
@@ -140,32 +124,17 @@ describe("original media receipt through video Readable", () => {
     const first = frame();
     stream.video(first);
     for (let i = 2; i <= 4; i++) {
-      clock.set(BigInt(i) * 1_000_000n);
+      clock.set(i * 1_000);
       stream.video(frame(false));
     }
     const nextKey = frame();
-    clock.set(5_000_000n);
+    clock.set(5_000);
     stream.video(nextKey);
-    clock.set(9_000_000n);
+    clock.set(9_000);
     const received: ReceivedVideoFrame[] = [];
     reader.on("data", (value) => received.push(value));
     await flush();
     expect(received.map((value) => value.frame)).toEqual([first, nextKey]);
-    expect(received.map((value) => value.receipt.sequence)).toEqual([1n, 5n]);
-    expect(received.map((value) => value.receipt.monotonicUs)).toEqual([1_000_000n, 5_000_000n]);
-  });
-
-  it("uses process-monotonic receipt independently of a backwards wall-clock jump", async () => {
-    const clock = clocks();
-    const { source, stream } = harness();
-    const reader = track(openReadableFromConsumer(source.attach(), { objectMode: true, receiptMetadata: true }));
-    const received: ReceivedVideoFrame[] = [];
-    reader.on("data", (value) => received.push(value));
-    stream.video(frame());
-    clock.set(2_000_000n, -9_000_000);
-    stream.video(frame(false));
-    await flush();
-    expect(received.map((value) => value.receipt.monotonicUs)).toEqual([1_000_000n, 2_000_000n]);
-    expect(received.map((value) => value.receipt.sequence)).toEqual([1n, 2n]);
+    expect(received.map((value) => value.timestampMs)).toEqual([1_000, 5_000]);
   });
 });

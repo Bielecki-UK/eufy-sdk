@@ -594,20 +594,11 @@ export interface LiveVideoConfig {
   height: number;
 }
 
-/** Immutable identity and monotonic receipt of one video arrival in this SDK process. */
-export interface MediaReceipt {
-  /** Opaque identity of the shared source instance, independent of device identifiers. */
-  readonly sourceId: string;
-  /** Video arrival sequence within this source; retained delivery keeps the same value. */
-  readonly sequence: bigint;
-  /** process.hrtime clock in microseconds when the source first received the frame; not sensor capture time. */
-  readonly monotonicUs: bigint;
-}
-
-/** Video frame paired with its original source receipt; retained deliveries reuse the frozen receipt. */
+/** Video frame paired with its original SDK source-arrival time. */
 export interface ReceivedVideoFrame {
   readonly frame: LiveVideoFrame;
-  readonly receipt: MediaReceipt;
+  /** Wall-clock milliseconds when the shared source received the frame; preserved on replay. */
+  readonly timestampMs: number;
 }
 
 /**
@@ -902,7 +893,7 @@ export interface MediaProvider {
   /**
    * Open a video-only `node:stream` Readable over a shared source consumer — raw Annex-B bytes
    * (default) or `objectMode` {@link LiveVideoFrame}s. With objectMode and receiptMetadata,
-   * it yields {@link ReceivedVideoFrame} envelopes whose original receipt survives retained replay.
+   * it yields {@link ReceivedVideoFrame} envelopes whose original source-arrival time survives retained replay.
    * Audio is available separately through
    * {@link live} or muxed through {@link recordFragments}; it is never interleaved into raw video.
    * The caller owns the Readable's lifetime, and destroying it releases the shared pull.

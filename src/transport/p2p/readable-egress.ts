@@ -19,8 +19,8 @@ import type { LiveVideoFrame, ReceivedVideoFrame } from "../../core/contracts.js
 export interface ReadableEgressOptions {
   /** Emit {@link LiveVideoFrame} objects instead of raw Annex-B bytes (default false = bytes). */
   objectMode?: boolean;
-  /** Yield ReceivedVideoFrame envelopes with original source-arrival times; requires objectMode. */
-  receiptMetadata?: boolean;
+  /** Yield ReceivedVideoFrame envelopes with original source-arrival times; ignored in raw mode. */
+  arrivalTime?: boolean;
   /** Readable highWaterMark (bytes, or object count in objectMode). */
   highWaterMark?: number;
 }
@@ -51,12 +51,13 @@ export function openReadableFromConsumer(consumer: Consumer, opts: ReadableEgres
     const ok = readable.push(objectMode ? frame : frame.data);
     if (!ok) consumer.pause();
   };
-  if (objectMode && opts.receiptMetadata) {
+  if (objectMode && opts.arrivalTime) {
     consumer.onMedia((item) => {
       if (item.kind !== "video") return;
       const received: ReceivedVideoFrame = { frame: item.frame, timestampMs: item.timestampMs };
       if (!readable.push(received)) consumer.pause();
     });
+    // Adding the first video listener releases the cached keyframe-prime.
     consumer.on("video", () => {});
   } else consumer.on("video", onVideo);
 

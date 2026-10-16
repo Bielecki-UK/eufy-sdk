@@ -892,14 +892,15 @@ export interface MediaProvider {
   record(seconds: number, opts?: { timeoutMs?: number; skipKeyframes?: number }): Promise<Buffer>;
   /**
    * Open a video-only `node:stream` Readable over a shared source consumer — raw Annex-B bytes
-   * (default) or `objectMode` {@link LiveVideoFrame}s. With objectMode and receiptMetadata,
+   * (default) or `objectMode` {@link LiveVideoFrame}s. With objectMode and arrivalTime,
    * it yields {@link ReceivedVideoFrame} envelopes whose original source-arrival time survives retained replay.
+   * Raw mode ignores arrivalTime.
    * Audio is available separately through
    * {@link live} or muxed through {@link recordFragments}; it is never interleaved into raw video.
    * The caller owns the Readable's lifetime, and destroying it releases the shared pull.
    */
   openReadable?(
-    opts?: { objectMode?: boolean; receiptMetadata?: boolean } & SharedSourceHints & AbortableCall,
+    opts?: { objectMode?: boolean; arrivalTime?: boolean } & SharedSourceHints & AbortableCall,
   ): Promise<import("node:stream").Readable>;
   /**
    * Continuously record the live feed as fragmented-MP4 (CMAF). The caller-owned

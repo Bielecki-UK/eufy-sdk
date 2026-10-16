@@ -1208,7 +1208,7 @@ export class P2PCommandRouter {
    */
   private tearDownStation(stationSn: string): void {
     this.manager.remove(stationSn);
-    for (const key of this.liveSources.keys()) {
+    for (const key of [...this.liveSources.keys()]) {
       const owner = this.liveSessionKeys.get(key);
       if (key.startsWith(`${stationSn}:`) && !(owner && P2PCommandRouter.isMediaSessionKey(owner))) {
         this.dropLiveSource(key);

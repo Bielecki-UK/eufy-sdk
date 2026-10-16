@@ -351,11 +351,7 @@ export class MegaHttpClient {
   /** True while a 2FA code is outstanding: `auth_` holds only the limited pre-verify token, so the
    *  restored-session short-circuit must NOT treat it as a usable session. Cleared on Ok/reset. */
   private pending2fa = false;
-  /**
-   * An autonomous re-login came back needing a captcha or a 2FA code, which only a login driven from outside
-   * can answer. Kept apart from {@link pending2fa} because {@link clearSession} resets that one when the
-   * limited token is rejected; cleared by a login that completes or a session adopted from the store.
-   */
+  /** An autonomous re-login answered captcha/2FA; see {@link canReauthenticate}. */
   private reloginChallenged = false;
   private tokenExpiresAt = 0;
   /**

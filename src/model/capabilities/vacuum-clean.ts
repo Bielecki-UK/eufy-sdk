@@ -2207,25 +2207,23 @@ export const VACUUM_CLEAN_MEMBERS = {
     description: "Deep corner mopping — UnisettingResponse.deep_mop_corner_sw (DP 176, Raw protobuf).",
   },
   /**
-   * How long the robot waits before warning that its dust bag is full, in SECONDS.
-   *
-   * Confirmed on a T2351 whose app shows a 10-hour reminder: the field carries `36000`.
+   * How long the robot waits before warning that its dust bag is full, in MINUTES.
    *
    * `dust_full_remind` is a `Numerical`, not a `Switch`, and the two are the same two bytes on the
-   * wire — `{ value = 1 }` either way — so reading it as a boolean reports a ten-hour setting as `true`
-   * with nothing to show anything went wrong. `0` means the reminder is off.
+   * wire — `{ value = 1 }` either way — so reading it as a boolean reports a thirty-minute setting as
+   * `true` with nothing to show anything went wrong. `0` means the reminder is off.
    */
-  dustFullRemindSeconds: {
+  dustFullRemindMinutes: {
     readsFrom: "childLock",
     type: "number",
-    unit: "s",
-    kind: "seconds",
+    unit: "min",
+    kind: "scalar",
     provenance: "mega",
     decode: (raw, codec) =>
       decodeUnisettingNumber(raw as ParamValue | undefined, codec, UNISETTING_FIELD.DUST_FULL_REMIND),
-    decodedKind: "seconds",
+    decodedKind: "scalar",
     description:
-      "Dust-bag-full reminder delay in seconds, 0 = off — UnisettingResponse.dust_full_remind " +
+      "Dust-bag-full reminder delay in minutes, 0 = off — UnisettingResponse.dust_full_remind " +
       "(DP 176, Raw protobuf). A Numerical, not a switch.",
   },
   /**

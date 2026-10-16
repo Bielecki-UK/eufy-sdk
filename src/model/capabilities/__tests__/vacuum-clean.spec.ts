@@ -1170,7 +1170,7 @@ describe("UnisettingResponse in the shape a T2351 sends", () => {
     expect(acts.aiSee).toBe(true);
     expect(acts.waterLevelSwitch).toBe(false);
     expect(acts.suggestRestricted).toBe(true);
-    expect(acts.dustFullRemindSeconds).toBe(7200);
+    expect(acts.dustFullRemindMinutes).toBe(7200);
     expect(acts.livePhoto).toBe(false);
     expect(acts.hasValidMap).toBe(true);
     expect(acts.wifiSignal).toBe(55);
@@ -1193,13 +1193,13 @@ describe("UnisettingResponse — the fields that are not switches", () => {
   const POOP_AVOIDANCE = 14;
   const PET_MODE = 15;
 
-  it("reads dust_full_remind as the second count it is", () => {
+  it("reads dust_full_remind as the minute count it is", () => {
     // The bug this replaced: `Numerical { uint32 value = 1 }` and `Switch { bool value = 1 }` are the
-    // same two bytes, so the boolean reader accepted this and answered `true` for ten hours.
+    // same two bytes, so the boolean reader accepted this and answered `true` for thirty minutes.
     // Nothing errored and the number was gone.
-    const payload = frame(sub(DUST_FULL_REMIND, int(1, 36000)));
+    const payload = frame(sub(DUST_FULL_REMIND, int(1, 30)));
 
-    expect(decodeUnisettingNumber(payload, byteCodec, DUST_FULL_REMIND)).toBe(36000);
+    expect(decodeUnisettingNumber(payload, byteCodec, DUST_FULL_REMIND)).toBe(30);
     // What the old read said about the same bytes, kept as the demonstration:
     expect(decodeUnisetting(payload, byteCodec, DUST_FULL_REMIND)).toBe(true);
   });

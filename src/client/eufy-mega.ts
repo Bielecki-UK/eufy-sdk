@@ -688,11 +688,6 @@ export class EufyMega extends EventEmitter {
   /**
    * Read every Tuya clean-line device's DPs from the Tuya cloud and deliver them as realtime state,
    * concurrently. A failed read is reported, not fatal, and leaves that device's state as it was.
-   *
-   * Run once as realtime comes up and again on each cloud poll pass: a Tuya robot's state lives on the
-   * Tuya cloud, and the SDK holds no live channel to it, so re-reading on the poll cadence is what keeps
-   * its state fresh. A changed DP lands through the same realtime-report path as the first read and
-   * announces edge-triggered, so an unchanged pass is silent.
    */
   private async readTuyaDevices(): Promise<void> {
     await Promise.all(
@@ -1624,7 +1619,8 @@ export class EufyMega extends EventEmitter {
    *
    * Then re-reads every Tuya clean-line robot from the Tuya cloud ({@link readTuyaDevices}): its state
    * is not in the cloud record this pass diffs and no live channel carries it, so the poll is where it
-   * stays fresh.
+   * stays fresh. That read runs after the `try`, not inside it, so a cloud error on the list diff does
+   * not skip it; it reports its own failures and never rejects.
    */
   private async pollOnce(): Promise<void> {
     try {
@@ -1637,10 +1633,10 @@ export class EufyMega extends EventEmitter {
           this.emitSemantic(out.event, out.payload, { refresh: out.refresh });
       for (const dev of diff.reported) this.emit("deviceState", this.stateOf(dev));
       for (const change of diff.params) await this.widenCapabilities(change.deviceSn);
-      await this.readTuyaDevices();
     } catch (e) {
       this.reportError(e);
     }
+    await this.readTuyaDevices();
   }
 
   /**

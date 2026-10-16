@@ -341,6 +341,8 @@ export class MegaHttpClient {
   /** True while a 2FA code is outstanding: `auth_` holds only the limited pre-verify token, so the
    *  restored-session short-circuit must NOT treat it as a usable session. Cleared on Ok/reset. */
   private pending2fa = false;
+  /** An autonomous re-login answered captcha/2FA; see {@link canReauthenticate}. */
+  private reloginChallenged = false;
   private tokenExpiresAt = 0;
   /**
    * Stable per-install device id: `openudid` as configured, as restored from the session store, or as
@@ -403,6 +405,7 @@ export class MegaHttpClient {
    *
    * Read at construction, and again when a rejection is being recovered from — a store SHARED with another
    * client may already hold the session that client obtained, which is cheaper to adopt than to compete with.
+   * An adopted session is a complete one, so it ends any 2FA or challenged re-login this client was left with.
    *
    * Note: the device identity (openudid + phone model + media UA) is NOT restored here — it is resolved once
    * in the constructor, where an explicit config wins over the stored value, and must not be re-derived from a
@@ -420,6 +423,8 @@ export class MegaHttpClient {
       geoKey: saved.geoKey,
     };
     this.tokenExpiresAt = saved.tokenExpiresAt;
+    this.pending2fa = false;
+    this.reloginChallenged = false;
     this.sessionKey = {
       keyIdent: saved.keyIdent,
       shareKey: saved.shareKey,
@@ -1235,11 +1240,13 @@ export class MegaHttpClient {
    * Structural rather than a list of paths: a login round trip is itself an authenticated call while a limited
    * token is held, so re-logging in from inside one would recurse — and a path list would have to be
    * maintained alongside every request the login flow makes. A 2FA code already outstanding is a login a human
-   * is part-way through, and restarting it silently would discard it. No credentials means nothing to try,
+   * is part-way through, and restarting it silently would discard it. A re-login that already came back needing
+   * a captcha or a 2FA code would need the same again, and each attempt sends the account another code, so
+   * none is tried until a login completes or a stored session is adopted. No credentials means nothing to try,
    * so the rejection surfaces instead.
    */
   private canReauthenticate(): boolean {
-    return !!this.cfg.email && !!this.cfg.password && !this.loggingIn && !this.pending2fa;
+    return !!this.cfg.email && !!this.cfg.password && !this.loggingIn && !this.pending2fa && !this.reloginChallenged;
   }
 
   /**
@@ -1257,7 +1264,10 @@ export class MegaHttpClient {
     this.reauthAttempt ??= this.login()
       .then((result) => {
         if (result.status === LoginStatus.Ok) this.logger.debug("[mega] token was rejected — logged in again");
-        else this.logger.warn(`[mega] token was rejected and the re-login needs ${result.status} — cannot recover`);
+        else {
+          this.reloginChallenged = true;
+          this.logger.warn(`[mega] token was rejected and the re-login needs ${result.status} — cannot recover`);
+        }
         return result.status === LoginStatus.Ok;
       })
       .catch((e: unknown) => {
@@ -1349,6 +1359,7 @@ export class MegaHttpClient {
 
     this.pendingCaptchaId = undefined;
     this.pending2fa = false;
+    this.reloginChallenged = false;
     this.auth_ = { userId, accountUserId, authToken, geoKey };
     this.tokenExpiresAt = reply.tokenExpiresAt;
     // Re-exchange WITH the auth token so the gateway binds the key-ident to the user.

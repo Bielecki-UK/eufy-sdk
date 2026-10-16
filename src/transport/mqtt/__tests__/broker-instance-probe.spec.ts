@@ -68,10 +68,10 @@ describe("probeBrokerInstance", () => {
     const client = await nextClient(fakeClients);
     client.subscribe.mockImplementationOnce(
       (topic: string, _opts: unknown, cb: (e: Error | null, g: unknown, packet: unknown) => void) =>
-        cb(new Error("Subscribe error: Not authorized"), [{ topic, qos: 1 }], { cmd: "suback", granted: [0x87] }),
+        cb(new Error("Subscribe error: Unspecified error"), [{ topic, qos: 1 }], { cmd: "suback", granted: [0x80] }),
     );
     client.emit("connect");
 
-    expect(await p).toMatchObject({ granted: false, grantedQos: 0x87, error: "Subscribe error: Not authorized" });
+    expect(await p).toMatchObject({ granted: false, grantedQos: 0x80, error: "Subscribe error: Unspecified error" });
   });
 });

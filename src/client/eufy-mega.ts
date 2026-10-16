@@ -1754,6 +1754,17 @@ export class EufyMega extends EventEmitter {
     await this.p2p.ensureStation(this.p2p.stationKeyOf(deviceSn), signal);
   }
 
+  /**
+   * Keep a T9000 station's RTC command session open and warm, so a command fires without a cold reconnect.
+   * Answers the hold's disposer; throws for any other station, and while logged out.
+   */
+  keepStationWarm(stationSn: string): () => void {
+    const { t9000 } = this.stationOf(stationSn);
+    const route = this.rtcRouteFor(stationSn);
+    if (!t9000 || !route) throw new Error(`rtc: ${stationSn} has no warm command session`);
+    return this.rtc.keepWarm(route);
+  }
+
   /** Eagerly open P2P sessions for WIRED stations only (persistent — they don't drain). Battery
    *  stations stay closed until an on-demand open. Best-effort per station. */
   private async warmWiredP2P(

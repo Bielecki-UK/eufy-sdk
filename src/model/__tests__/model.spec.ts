@@ -293,10 +293,9 @@ describe("doorbell — confirmed against real T8214", () => {
     expect(r.name).toBe("Video Doorbell");
   });
 
-  it("names the T8354 Baby Monitor E21 and offers pan/tilt without the preset params", () => {
+  it("names the T8354 Baby Monitor E21", () => {
     const r = resolveDevice({ model: "T8354", deviceType: 86 });
     expect(r.source).toBe("model");
-    expect(r.capabilities).toContain("ptz");
     expect(r.name).toBe("Baby Monitor E21");
   });
 

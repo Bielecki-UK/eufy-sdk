@@ -76,7 +76,7 @@ import {
   type DeviceInspection,
   type RawParams,
 } from "../model/index.js";
-import { isHomeBase, isNvrT8N00, isStation9000 } from "../model/device-family.js";
+import { isHomeBase, isNvrT8N00, isStation9000, isTuyaVacuum } from "../model/device-family.js";
 import { cameraPowerTier } from "../model/capabilities/battery.js";
 import { DeviceRegistry, type DeviceRecord, type ParamChange } from "./device-registry.js";
 import type {
@@ -125,11 +125,6 @@ function adminUserIdFrom(raw: unknown): string | undefined {
   const member = ((raw ?? {}) as Record<string, unknown>).member as Record<string, unknown> | undefined;
   const id = member?.admin_user_id;
   return typeof id === "string" && id ? id : undefined;
-}
-
-/** Whether `d` is a Tuya clean-line device (`eufy_home_tuya`), whose state lives on the Tuya cloud. */
-function isTuyaDevice(d: EufyDevice): boolean {
-  return d.category === "eufy_home_tuya";
 }
 
 /**
@@ -558,7 +553,7 @@ export class EufyMega extends EventEmitter {
     if (!dev || dev.realtime !== "smqtt") return;
     const caps = this.registry.capabilitiesForDevice(sn);
     if (!caps || !hasRealtimeReads(caps)) return;
-    if (!isTuyaDevice(dev)) {
+    if (!isTuyaVacuum(dev)) {
       try {
         await this.ensureMqttStarted(mqttScopeFor(dev));
       } catch {
@@ -684,7 +679,7 @@ export class EufyMega extends EventEmitter {
     return [
       ...new Set(
         this.getMqttDevices()
-          .filter((d) => !isTuyaDevice(d))
+          .filter((d) => !isTuyaVacuum(d))
           .map(mqttScopeFor),
       ),
     ];
@@ -695,7 +690,7 @@ export class EufyMega extends EventEmitter {
    * failed read is reported, not fatal, and leaves that device's state as it was.
    */
   private readTuyaDevices(): void {
-    for (const d of this.getMqttDevices().filter(isTuyaDevice)) {
+    for (const d of this.getMqttDevices().filter(isTuyaVacuum)) {
       this.tuya
         .fetchDps(d.sn)
         .then((dps) => {
@@ -1227,7 +1222,7 @@ export class EufyMega extends EventEmitter {
     }
     if (cmd.kind === "aiot-dp") {
       const dev = this.registry.require(sn);
-      if (isTuyaDevice(dev)) return this.tuya.dispatchCommand(sn, cmd);
+      if (isTuyaVacuum(dev)) return this.tuya.dispatchCommand(sn, cmd);
       return this.mqtt.dispatchCommand(sn, cmd);
     }
     const route = this.rtcRouteFor(sn);
@@ -1284,7 +1279,7 @@ export class EufyMega extends EventEmitter {
   async getDevices(): Promise<EufyDevice[]> {
     const devices = await this.registry.getDevices();
     for (const dev of devices) {
-      if (!isTuyaDevice(dev)) continue;
+      if (!isTuyaVacuum(dev)) continue;
       const raw = (dev.raw ?? {}) as Record<string, unknown>;
       this.tuya.registerDevice(dev.sn, tuyaDevIdFrom(raw) ?? dev.sn);
     }
@@ -1993,7 +1988,7 @@ export class EufyMega extends EventEmitter {
    * and the broker refuses its `eufy_home` topics on every credential.
    */
   private async subscribeMqttDevices(scope: MqttScope, transport: SecureMqtt): Promise<void> {
-    for (const d of this.getMqttDevices().filter((dev) => !isTuyaDevice(dev) && mqttScopeFor(dev) === scope)) {
+    for (const d of this.getMqttDevices().filter((dev) => !isTuyaVacuum(dev) && mqttScopeFor(dev) === scope)) {
       try {
         await transport.subscribeDevice(d);
         await this.sendRealtimeInit(d.sn);

@@ -2,7 +2,6 @@ import { DeviceType } from "../device-types.js";
 import { setJson, setPayload } from "./access.js";
 import { method, propertiesOf, type Members, type Surface } from "./members.js";
 import type { CapabilityModule, InboundSignal, CapabilityEvent, CommandContext } from "./types.js";
-import type { CloudRecord } from "../types.js";
 import type { Command } from "../../core/contracts.js";
 
 /**
@@ -178,8 +177,6 @@ function hasZoomEvidence(ctx: CommandContext): boolean {
   return ZOOM_EVIDENCE_PARAMS.some((p) => ctx.paramIds.has(p)) || (!!ctx.model && ZOOM_MODEL_HINT.test(ctx.model));
 }
 
-/** Reported params that prove a SoloCam pans/tilts: the preset slots (6090/6091/6092/6210) and the
- * rotate command surface (1029). */
 const PRESET_EVIDENCE_PARAMS = [1029, 6090, 6091, 6092, 6210];
 
 /**
@@ -188,13 +185,6 @@ const PRESET_EVIDENCE_PARAMS = [1029, 6090, 6091, 6092, 6210];
  * preset params prove nothing.
  */
 const FIXED_LENS_MODELS: ReadonlySet<string> = new Set(["T8134"]);
-
-/** Whether the record reports a preset param on a model whose preset params prove pan-tilt. */
-function hasPresetEvidence(rec: CloudRecord): boolean {
-  return (
-    !FIXED_LENS_MODELS.has(rec.model ?? "") && PRESET_EVIDENCE_PARAMS.some((p) => Object.hasOwn(rec.params ?? {}, p))
-  );
-}
 
 /**
  * Pan-tilt rotate as a transport-neutral {@link Command}. CONFIRMED wire command (captured on
@@ -508,7 +498,9 @@ export const PTZ: CapabilityModule = {
   // a `T81\d\dR` wildcard: the "R = rotating" reading is unverified for other models, and an
   // over-broad hint would false-positive a future non-PT model, the same class of bug as a mislabel.
   detection: {
-    detect: hasPresetEvidence,
+    detect: (record) =>
+      !FIXED_LENS_MODELS.has(record.model ?? "") &&
+      PRESET_EVIDENCE_PARAMS.some((p) => Object.hasOwn(record.params ?? {}, p)),
     deviceTypes: [
       DeviceType.OUTDOOR_PT_CAMERA,
       DeviceType.INDOOR_PT_CAMERA,

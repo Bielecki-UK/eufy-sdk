@@ -1134,19 +1134,72 @@ describe("UnisettingResponse.unistate — device state, two levels down", () => 
   });
 });
 
+describe("UnisettingResponse in the shape a T2351 sends", () => {
+  // Synthetic values in the field layout a live T2351 reported: the toggles at the top, `unistate` at
+  // #10 with a field (#8) nothing reads, a bare signal at #11, and five more top-level fields (#16, #18,
+  // #21, #22, #23) no member names. #2 and #7 are absent, as on that robot.
+  const payload = frame([
+    ...sub(1, int(1, 1)),
+    ...sub(3, []),
+    ...sub(4, int(1, 1)),
+    ...sub(5, []),
+    ...sub(6, int(1, 1)),
+    ...sub(8, int(1, 7200)),
+    ...sub(9, []),
+    ...sub(10, [...sub(1, int(1, 1)), ...sub(2, []), ...sub(4, int(1, 1)), ...sub(8, [])]),
+    ...int(11, 55),
+    ...sub(13, []),
+    ...sub(14, int(1, 1)),
+    ...sub(15, int(1, 1)),
+    ...sub(16, int(1, 1)),
+    ...sub(18, []),
+    ...sub(21, []),
+    ...sub(22, int(1, 1)),
+    ...sub(23, [...sub(1, []), ...sub(2, []), ...sub(3, [])]),
+  ]);
+  const bound = () =>
+    bind<VacuumCleanActions>("vacuum_clean", fakeCtx(undefined, undefined, new Set([VACUUM_DP.SETTINGS])), {
+      rawDp: byteCodec,
+      read: (name) => (name === "childLock" ? { value: payload } : undefined),
+    });
+
+  it("answers every read, and the fields no member names change nothing", () => {
+    const acts = bound().acts;
+    expect(acts.childLock).toBe(true);
+    expect(acts.multiMap).toBe(false);
+    expect(acts.aiSee).toBe(true);
+    expect(acts.waterLevelSwitch).toBe(false);
+    expect(acts.suggestRestricted).toBe(true);
+    expect(acts.dustFullRemindSeconds).toBe(7200);
+    expect(acts.livePhoto).toBe(false);
+    expect(acts.hasValidMap).toBe(true);
+    expect(acts.wifiSignal).toBe(55);
+    expect(acts.smartFollow).toBe(false);
+    expect(acts.poopAvoidance).toBe(true);
+    expect(acts.petMode).toBe(true);
+  });
+
+  it("leaves a toggle the robot does not send undefined, which is not off", () => {
+    const acts = bound().acts;
+    expect(acts.cruiseContinue).toBeUndefined();
+    expect(acts.deepMopCorner).toBeUndefined();
+    expect(acts.mapLayers).toBeUndefined();
+  });
+});
+
 describe("UnisettingResponse — the fields that are not switches", () => {
   const DUST_FULL_REMIND = 8;
   const AP_SIGNAL = 11;
   const POOP_AVOIDANCE = 14;
   const PET_MODE = 15;
 
-  it("reads dust_full_remind as the minute count it is", () => {
+  it("reads dust_full_remind as the second count it is", () => {
     // The bug this replaced: `Numerical { uint32 value = 1 }` and `Switch { bool value = 1 }` are the
-    // same two bytes, so the boolean reader accepted this and answered `true` for thirty minutes.
+    // same two bytes, so the boolean reader accepted this and answered `true` for ten hours.
     // Nothing errored and the number was gone.
-    const payload = frame(sub(DUST_FULL_REMIND, int(1, 30)));
+    const payload = frame(sub(DUST_FULL_REMIND, int(1, 36000)));
 
-    expect(decodeUnisettingNumber(payload, byteCodec, DUST_FULL_REMIND)).toBe(30);
+    expect(decodeUnisettingNumber(payload, byteCodec, DUST_FULL_REMIND)).toBe(36000);
     // What the old read said about the same bytes, kept as the demonstration:
     expect(decodeUnisetting(payload, byteCodec, DUST_FULL_REMIND)).toBe(true);
   });

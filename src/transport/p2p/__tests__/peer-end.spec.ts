@@ -2,7 +2,7 @@ import dgram from "node:dgram";
 import { once } from "node:events";
 import { setTimeout as delay } from "node:timers/promises";
 import { describe, expect, it, vi } from "vitest";
-import { frameMessage, hasHeader, RequestMessageType, ResponseMessageType } from "../codec.js";
+import { frameMessage, ResponseMessageType } from "../codec.js";
 import { P2PSession } from "../p2p-session.js";
 
 /** A real loopback peer; no production endpoint or mocked socket receive path. */
@@ -16,20 +16,6 @@ async function peer(host = "127.0.0.1") {
 /** Connect through an actual CAM_ID datagram, then retain the observed client source port. */
 async function connectedPeer() {
   const remote = await peer();
-  const packets: Buffer[] = [];
-  remote.on("message", (packet, source) => {
-    packets.push(packet);
-    if (hasHeader(packet, RequestMessageType.DATA)) {
-      remote.send(
-        frameMessage(
-          ResponseMessageType.ACK,
-          Buffer.concat([packet.subarray(4, 6), Buffer.from([0, 1]), packet.subarray(6, 8)]),
-        ),
-        source.port,
-        source.address,
-      );
-    }
-  });
   const session = new P2PSession({ stationSn: "T8000P0000000000", p2pDid: "XXXXXXX-000000-XXXXX", noBroadcast: true });
   session.on("error", () => undefined);
   await session.connect();
@@ -37,7 +23,7 @@ async function connectedPeer() {
   const connected = once(session, "connect");
   remote.send(frameMessage(ResponseMessageType.CAM_ID), clientPort, "127.0.0.1");
   await connected;
-  return { remote, session, clientPort, packets };
+  return { remote, session, clientPort };
 }
 
 describe("peer-ended P2P sessions over UDP", () => {

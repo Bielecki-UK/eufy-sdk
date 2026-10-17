@@ -594,6 +594,13 @@ export interface LiveVideoConfig {
   height: number;
 }
 
+/** Video frame paired with its original SDK source-arrival time. */
+export interface ReceivedVideoFrame {
+  readonly frame: LiveVideoFrame;
+  /** Wall-clock milliseconds when the shared source received the frame; preserved on replay. */
+  readonly timestampMs: number;
+}
+
 /**
  * Elementary-stream audio codec of a {@link LiveAudioFrame}. The station declares it per frame as a
  * byte in the `CMD_AUDIO_FRAME` header — unlike video, nothing is sniffed. These are the three values
@@ -885,12 +892,14 @@ export interface MediaProvider {
   record(seconds: number, opts?: { timeoutMs?: number; skipKeyframes?: number }): Promise<Buffer>;
   /**
    * Open a video-only `node:stream` Readable over a shared source consumer — raw Annex-B bytes
-   * (default) or `objectMode` {@link LiveVideoFrame}s. Audio is available separately through
-   * {@link live} or muxed through {@link recordFragments}; it is never interleaved into raw video.
-   * The caller owns the Readable's lifetime, and destroying it releases the shared pull.
+   * (default) or `objectMode` {@link LiveVideoFrame}s. With objectMode and arrivalTime, it yields
+   * {@link ReceivedVideoFrame} envelopes whose original source-arrival time survives retained replay.
+   * Raw mode ignores arrivalTime. Audio is available separately through {@link live} or muxed through
+   * {@link recordFragments}; it is never interleaved into raw video. The caller owns the Readable's
+   * lifetime, and destroying it releases the shared pull.
    */
   openReadable?(
-    opts?: { objectMode?: boolean } & SharedSourceHints & AbortableCall,
+    opts?: { objectMode?: boolean; arrivalTime?: boolean } & SharedSourceHints & AbortableCall,
   ): Promise<import("node:stream").Readable>;
   /**
    * Continuously record the live feed as fragmented-MP4 (CMAF). The caller-owned

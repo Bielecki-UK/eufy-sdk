@@ -153,11 +153,17 @@ const STANDALONE_ACTION_MODELS: ReadonlySet<string> = new Set(["T8170", "T8171"]
  * (`mode_type` 1) and Away (`mode_type` 0) were captured and decrypted 2026-10-17, and where the camera
  * answers the `1350` form with result -103 at both level 1 and level 2. Away (0), Home (1) and Disarmed
  * (63) were each also sent as this frame live on 2026-10-17: the camera answered each on outer 1224 with
- * result 0 and param 1224 reported the requested mode within the readback window. The other six modes are
- * the same frame with a different `mode_type`, unconfirmed on this model. No other model is confirmed for
- * this frame.
+ * result 0 and param 1224 reported the requested mode within the readback window. Only those three modes
+ * are written on this frame ({@link DIRECT_ARMING_MODES}). No other model is confirmed for this frame.
  */
 const DIRECT_ARMING_MODELS: ReadonlySet<string> = new Set(["T8410C"]);
+
+/**
+ * The guard modes a {@link DIRECT_ARMING_MODELS} model is written on the direct frame: Away, Home and
+ * Disarmed, each confirmed live on a T8410C 2026-10-17. Any other mode on such a model throws before a
+ * frame is built.
+ */
+const DIRECT_ARMING_MODES: ReadonlySet<ArmingMode> = new Set<ArmingMode>(["away", "home", "disarmed"]);
 
 /** The standalone cameras whose own flags are read live: the two above plus the three that stay read only. */
 const STANDALONE_READ_MODELS: ReadonlySet<string> = new Set([...STANDALONE_ACTION_MODELS, "T8400", "T8442", "T8410"]);
@@ -246,8 +252,9 @@ function armingModeOf(v: boolean | number | string): ArmingMode | undefined {
 
 /**
  * Build the {@link ARMING_CMD.SET_ARMING} write intent, or throw if the context has no account
- * identity. A model in {@link DIRECT_ARMING_MODELS} gets the direct `p2p-station-scalar` frame; every other
- * model gets the `1350` set-payload envelope below. `user_name` — the real app's own capture showed a
+ * identity. A model in {@link DIRECT_ARMING_MODELS} gets the direct `p2p-station-scalar` frame for a mode in
+ * {@link DIRECT_ARMING_MODES} and a throw for any other mode; every other model gets the `1350` set-payload
+ * envelope below. `user_name` — the real app's own capture showed a
  * MASKED value (`"max***"`, presumably the app's own privacy-display truncation of the account's email
  * local-part), not the unmasked acting name `ctx.accountName` carries. Untested whether the device
  * validates this field strictly; sending the acting name as it stands is the more correct choice
@@ -265,6 +272,9 @@ function armingCommand(mode: ArmingMode, ctx: CommandContext): Command {
     throw new Error(`arming: missing account identity (user_name) [${describeDevice(ctx)}]`);
   }
   if (DIRECT_ARMING_MODELS.has(ctx.model ?? "")) {
+    if (!DIRECT_ARMING_MODES.has(mode)) {
+      throw new Error(`arming: mode ${mode} is unconfirmed on the direct 1224 frame [${describeDevice(ctx)}]`);
+    }
     return setStationScalar(ARMING_CMD.SET_ARMING, ARMING_MODE_WIRE[mode], ctx.channel);
   }
   return setPayload(
@@ -431,7 +441,7 @@ export const ARMING_MEMBERS = {
       "byte-captured writes and six are live-confirmed (each sent and observed to report its own " +
       "MODE_SWITCH); see ARMING_MODE_WIRE in arming.ts for the per-value evidence. A T8410C is written " +
       "with the direct 1224 frame rather than the 1350 envelope (Home and Away captured from the app; Away, " +
-      "Home and Disarmed confirmed live; the other six modes unconfirmed on that model).",
+      "Home and Disarmed confirmed live); the other six modes throw on that model.",
     observation: {
       event: "armingModeChanged",
       reflects: (value) => ({ param: ARMING_CMD.SET_ARMING, expected: ARMING_MODE_WIRE[armingModeOf(value)!] }),

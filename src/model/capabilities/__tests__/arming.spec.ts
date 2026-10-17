@@ -190,6 +190,20 @@ describe("arming capability module", () => {
       expect(sent).toEqual([{ kind: "p2p-station-scalar", cmd: 1224, value, channel: 0 }]);
     });
 
+    it.each([
+      ArmingMode.schedule,
+      ArmingMode.custom1,
+      ArmingMode.custom2,
+      ArmingMode.custom3,
+      ArmingMode.off,
+      ArmingMode.geo,
+    ])("%s on a T8410C throws and sends nothing (unconfirmed on the direct frame)", async (mode) => {
+      const { acts, sent } = bind<ArmingActions>("arming", t8410c);
+      await expect(acts.setMode(mode)).rejects.toThrow(/unconfirmed on the direct 1224 frame/);
+      expect(() => buildCommand("armingMode", mode, t8410c)).toThrow(/unconfirmed on the direct 1224 frame/);
+      expect(sent).toEqual([]);
+    });
+
     it("buildCommand gives a T8410C the same direct frame", () => {
       expect(buildCommand("armingMode", "away", t8410c)).toEqual({
         kind: "p2p-station-scalar",

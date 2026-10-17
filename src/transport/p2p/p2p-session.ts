@@ -99,6 +99,14 @@ export const STATION_CHANNEL = 255;
  * (signCode 0).
  */
 const CMD_GATEWAYINFO = 1100;
+
+/**
+ * Serial prefixes whose own-session live start and stop go out unencrypted, in the form the current app
+ * sends a T8200: signCode 0, frame type 0, header bytes `[0x01, n]` with `n` counting the session's
+ * commands. Byte-verified against a capture of the app's own starts and stops for that model only.
+ */
+const REPRO_PLAINTEXT_START_SNS = ["T8200"];
+
 const CMD_START_REALTIME_MEDIA = 1003;
 const CMD_STOP_REALTIME_MEDIA = 1004;
 /**
@@ -1133,8 +1141,22 @@ export class P2PSession extends EventEmitter {
    * `video_type` is 12, and `transaction` is the millisecond timestamp as a string. The device answers a
    * start carrying these values with a keyframe; `encryptkey` is the modulus it RSA-wraps each keyframe's
    * AES media key with (unwrapped by {@link decodeVideoFrame}).
+   *
+   * A `REPRO_PLAINTEXT_START_SNS` station gets `{accountId, encryptkey, msg_id, streamtype: 1}` only, the
+   * body the current app sends that model, with `msg_id` changing on every start as the app's does. Its
+   * device answers the start with an HEVC stream.
    */
   private startLiveJson(channel: number, accountId: string): Buffer {
+    if (this.plaintextStartStation()) {
+      this.plaintextMsgId = (this.plaintextMsgId + 1) & 0xff;
+      return Buffer.from(
+        JSON.stringify({
+          commandType: CMD_START_LIVE,
+          data: { accountId, encryptkey: this.rsaModulus(), msg_id: this.plaintextMsgId, streamtype: 1 },
+        }),
+        "utf-8",
+      );
+    }
     const now = Date.now();
     return Buffer.from(
       JSON.stringify({
@@ -1164,11 +1186,35 @@ export class P2PSession extends EventEmitter {
     );
   }
 
+  /** Last `msg_id` sent in a `REPRO_PLAINTEXT_START_SNS` start body. */
+  private plaintextMsgId = 0;
+
+  /** Last `n` sent in a `REPRO_PLAINTEXT_START_SNS` command header's `[0x01, n]` bytes. */
+  private plaintextCommandCounter = 0x07;
+
+  /** Whether this station takes the unencrypted own-session start and stop. */
+  private plaintextStartStation(): boolean {
+    return REPRO_PLAINTEXT_START_SNS.some((prefix) => this.cfg.stationSn.startsWith(prefix));
+  }
+
+  /**
+   * Header bytes 10-11 of the next unencrypted own-session command: `[0x01, n]`. In the app's session `n`
+   * rises with every command it sends, pings included; a retransmit repeats it and the device's reply
+   * echoes it.
+   */
+  private nextPlaintextCommandBytes(): [number, number] {
+    this.plaintextCommandCounter = this.plaintextCommandCounter >= 0xff ? 0x02 : this.plaintextCommandCounter + 1;
+    return [0x01, this.plaintextCommandCounter];
+  }
+
   /**
    * Send the own-session START_LIVE frame (outer `CMD_CONTROL_PAYLOAD` 1700, inner cmd 1000). Level-2
    * (GCM, signCode 8, frame type 10) when the session has a negotiated key, else level-1 (AES-128-ECB,
    * signCode 1, frame type 11) — chosen by the session key, not the device family. The camera RSA-wraps
    * each keyframe's AES media key with the `encryptkey` modulus (unwrapped by {@link decodeVideoFrame}).
+   *
+   * A `REPRO_PLAINTEXT_START_SNS` station gets the start unencrypted instead: signCode 0, frame type 0,
+   * header bytes from {@link nextPlaintextCommandBytes}, the form the current app sends that model.
    */
   private sendStartLiveOwnSession(channel: number, accountId: string): void {
     if (!this.connectAddress) return;
@@ -1177,7 +1223,12 @@ export class P2PSession extends EventEmitter {
     let signCode: number;
     let magic: [number, number];
     let frameType: number;
-    if (this.level2Key) {
+    if (this.plaintextStartStation()) {
+      payload = plain;
+      signCode = 0;
+      magic = this.nextPlaintextCommandBytes();
+      frameType = 0;
+    } else if (this.level2Key) {
       const enc = this.encryptLevel2(plain);
       if (!enc) return;
       payload = enc;
@@ -1373,6 +1424,9 @@ export class P2PSession extends EventEmitter {
    *    `uint32`, the same 4-byte body as the attached talkback frames. The app sends this frame on closing
    *    an own-session camera's live view; the camera stops streaming on it within a second, and keeps
    *    streaming through the 1350-wrapped form.
+   *  - a `REPRO_PLAINTEXT_START_SNS` station: the direct 1004 frame unencrypted, with the camera channel as
+   *    a `uint32` body and header bytes from {@link nextPlaintextCommandBytes}, the stop the current app
+   *    sends that model.
    *  - without a level-2 key: the bare 1004 command.
    */
   stopLiveMedia(channel: number = STATION_CHANNEL, accountId = "", homeBaseAttached = false): void {
@@ -1384,7 +1438,16 @@ export class P2PSession extends EventEmitter {
       clearInterval(this.liveStartRetransmitTimer);
       this.liveStartRetransmitTimer = undefined;
     }
-    if (this.level2Key && !homeBaseAttached) {
+    if (this.plaintextStartStation() && this.connectAddress) {
+      const body = Buffer.alloc(4);
+      body.writeUInt32LE(channel >>> 0, 0);
+      const data = Buffer.concat([
+        buildCommandHeader(this.seqNumber, CMD_STOP_REALTIME_MEDIA),
+        buildRawCommandPayload(body, channel, 0, this.nextPlaintextCommandBytes(), 0),
+      ]);
+      this.seqNumber = (this.seqNumber + 1) & 0xffff;
+      this.send(this.connectAddress, RequestMessageType.DATA, data);
+    } else if (this.level2Key && !homeBaseAttached) {
       const body = Buffer.allocUnsafe(4);
       body.writeUInt32LE(channel >>> 0, 0);
       this.sendRawLevel2Bytes(body, channel, CMD_STOP_REALTIME_MEDIA, 8);

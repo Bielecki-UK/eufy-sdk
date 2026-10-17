@@ -90,6 +90,9 @@ export const MODEL_REGISTRY: Readonly<Record<string, RegistryEntry>> = {
   // Sensors — the concrete sensor kind is curated (DeviceType 2 alone is ambiguous).
   T8900: { codec: "sensor", caps: ["contact"], name: "Entry Sensor" },
   T8910: { codec: "sensor", caps: ["battery"], name: "Motion Sensor" },
+  // Smoke alarm E10. Its model code is outside the T89 sensor band, so without this row a real unit
+  // fell through to the camera codec. `smoke` is curated because its model hint reads the name.
+  T90S0: { codec: "sensor", caps: ["smoke"], name: "Smoke Alarm E10" },
 
   // Keypad (DeviceType 11).
   T8960: { codec: "keypad", name: "Keypad" },

@@ -101,15 +101,7 @@ function coerceByType(
 /** The string forms a boolean takes on the wire; anything else on a `bool` property is not a boolean. */
 const BOOL_WIRE = new Set(["0", "1", "true", "false"]);
 
-/**
- * Coerce one wire value to its property's declared type.
- *
- * A structured payload ({@link PropertySpec.raw}) is stored verbatim and read by the capability's
- * getter, so its declared type describes the ANSWER, not the wire. For `number` the coercion already
- * passes a base64 string through, since it is not numeric. For `bool` it would not: every string but
- * `"1"`/`"true"` reads as `false`, so the payload is kept as it arrived unless it is one of the boolean
- * wire forms a plain scalar alias sends. A raw property's pass-through is not logged as a mistake.
- */
+/** Coerce one wire value to its property's declared type. */
 function coerce(
   spec: PropertySpec,
   raw: string | number | boolean,

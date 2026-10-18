@@ -347,6 +347,18 @@ describe("doorbell — confirmed against real T8214", () => {
   });
 });
 
+describe("video lock — confirmed against real T8530", () => {
+  it("gives the video lock T8530 a camera beside its lock codec", () => {
+    // Its device_type classifies it `lock`, so without the row no camera capability exists and the
+    // live view it serves (verified on a HomeBase 3-attached unit) cannot be opened.
+    const r = resolveDevice({ model: "T8530", deviceType: DeviceType.LOCK_8530, parentSn: "T8030P0000000000" });
+    expect(r.codec).toBe("lock");
+    expect(r.capabilities).toContain("lock");
+    expect(r.capabilities).toContain("camera");
+    expect(r.name).toBe("Video Smart Lock S330");
+  });
+});
+
 describe("Device — state + graceful unknown params", () => {
   const rec: CloudRecord = { deviceType: 9, model: "T8114", params: {} };
 

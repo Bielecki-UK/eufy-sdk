@@ -87,6 +87,11 @@ export const MODEL_REGISTRY: Readonly<Record<string, RegistryEntry>> = {
   // Hardwired wall-light camera; mains power asserted in MAINS_CAMERA_MODELS.
   T84A1: { codec: "camera", name: "Wall Light Cam S100" },
 
+  // Video lock: classified `lock` by its device_type, but it carries a camera. Live view verified on a
+  // HomeBase 3-attached unit: the attached start (`1350` wrapping `1003`) streams, while a bare `1003`
+  // is refused with `-148` and no media.
+  T8530: { codec: "lock", caps: ["camera"], name: "Video Smart Lock S330" },
+
   // Sensors — the concrete sensor kind is curated (DeviceType 2 alone is ambiguous).
   T8900: { codec: "sensor", caps: ["contact"], name: "Entry Sensor" },
   T8910: { codec: "sensor", caps: ["battery"], name: "Motion Sensor" },

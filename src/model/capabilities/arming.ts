@@ -158,11 +158,7 @@ const STANDALONE_ACTION_MODELS: ReadonlySet<string> = new Set(["T8170", "T8171"]
  */
 const DIRECT_ARMING_MODELS: ReadonlySet<string> = new Set(["T8410C"]);
 
-/**
- * The guard modes a {@link DIRECT_ARMING_MODELS} model is written on the direct frame: Away, Home and
- * Disarmed, each confirmed live on a T8410C 2026-10-17. Any other mode on such a model throws before a
- * frame is built.
- */
+/** The modes confirmed on the direct frame; any other throws. */
 const DIRECT_ARMING_MODES: ReadonlySet<ArmingMode> = new Set<ArmingMode>(["away", "home", "disarmed"]);
 
 /** The standalone cameras whose own flags are read live: the two above plus the three that stay read only. */
@@ -252,14 +248,12 @@ function armingModeOf(v: boolean | number | string): ArmingMode | undefined {
 
 /**
  * Build the {@link ARMING_CMD.SET_ARMING} write intent, or throw if the context has no account
- * identity. A model in {@link DIRECT_ARMING_MODELS} gets the direct `p2p-station-scalar` frame for a mode in
- * {@link DIRECT_ARMING_MODES} and a throw for any other mode; every other model gets the `1350` set-payload
- * envelope below. `user_name` — the real app's own capture showed a
- * MASKED value (`"max***"`, presumably the app's own privacy-display truncation of the account's email
- * local-part), not the unmasked acting name `ctx.accountName` carries. Untested whether the device
- * validates this field strictly; sending the acting name as it stands is the more correct choice
- * regardless — it's almost certainly just attribution (e.g. "who armed the system" in event history), not
- * a value the device checks against anything.
+ * identity. `user_name` — the real app's own capture showed a MASKED value (`"max***"`, presumably
+ * the app's own privacy-display truncation of the account's email local-part), not the unmasked
+ * acting name `ctx.accountName` carries. Untested whether the device validates this field strictly;
+ * sending the acting name as it stands is the more correct choice regardless — it's almost certainly
+ * just attribution (e.g. "who armed the system" in event history), not a value the device checks
+ * against anything.
  *
  * `"auto"` on both counts `setPayload` names: `mValue3` is passed 0 explicitly, so both seals carry the
  * byte-identical JSON the T8030 capture recorded; and every device carrying `arming` is its own station
@@ -439,9 +433,8 @@ export const ARMING_MEMBERS = {
       "Guard mode (verified: param 1224 = GUARD_MODE, read/write mechanism confirmed). Reads and SETS all " +
       "9 modes the app defines — away/home/schedule/custom1/custom2/custom3/off/geo/disarmed. Three are " +
       "byte-captured writes and six are live-confirmed (each sent and observed to report its own " +
-      "MODE_SWITCH); see ARMING_MODE_WIRE in arming.ts for the per-value evidence. A T8410C is written " +
-      "with the direct 1224 frame rather than the 1350 envelope (Home and Away captured from the app; Away, " +
-      "Home and Disarmed confirmed live); the other six modes throw on that model.",
+      "MODE_SWITCH); see ARMING_MODE_WIRE in arming.ts for the per-value evidence. On a T8410C only " +
+      "away, home and disarmed are writable.",
     observation: {
       event: "armingModeChanged",
       reflects: (value) => ({ param: ARMING_CMD.SET_ARMING, expected: ARMING_MODE_WIRE[armingModeOf(value)!] }),

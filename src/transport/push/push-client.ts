@@ -143,8 +143,6 @@ export class PushClient extends EventEmitter {
    * `invalid2.invalid` — which now fails the handshake rather than being accepted. Verification matters
    * because the login request carries the account's `securityToken`, and an unverified peer could both
    * read it and inject forged pushes into the event path.
-   *
-   * A socket error is logged at warn under `[push]` and then re-emitted unchanged as `error`.
    */
   connect(): void {
     this.closing = false;

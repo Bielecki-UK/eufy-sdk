@@ -111,7 +111,8 @@ export type RtspActions = Surface<typeof RTSP_MEMBERS>;
 /**
  * Whether the publish switch has a wire to this camera. A HomeBase S1 Pro (`STATION_9000`) carries an
  * attached camera's commands over its WebRTC control channel, which takes only the `1350` and `1700`
- * envelopes; the switch is a plain scalar, and no other frame for it is captured there.
+ * envelopes; the switch is a plain scalar, and no other frame for it is captured there. Gating the
+ * `published` member drops its read with its setter, since one availability decision covers both.
  */
 function publishable(ctx: AvailabilityContext): boolean {
   return !isStation9000({ deviceType: ctx.stationDeviceType });

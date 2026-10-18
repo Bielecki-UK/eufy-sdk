@@ -88,13 +88,14 @@ describe("rtsp capability module", () => {
     expect(sent).toHaveLength(1);
   });
 
-  it("installs no publish switch on a camera behind a HomeBase S1 Pro, whose control channel cannot carry it", () => {
+  it("installs no publish switch, nor its read, on a camera behind a HomeBase S1 Pro, whose control channel cannot carry it", () => {
     const behindS1Pro = { ...ctx, homeBaseAttached: true, stationDeviceType: 27 } as CommandContext;
     const { acts: actions } = bind<RtspActions>("rtsp", behindS1Pro);
 
     expect(actions.publish).toBeUndefined();
     expect(actions.withdraw).toBeUndefined();
     expect((actions as Record<string, unknown>).setPublished).toBeUndefined();
+    expect(actions.published).toBeUndefined();
   });
 
   it("toggles authentication through the mode field of the credential payload, sent form:auto", async () => {

@@ -139,4 +139,14 @@ describe("forced starts the device acknowledges and serves nothing for", () => {
     expect(streams[0]!.nudged).toBeGreaterThan(3);
     expect(cannot).toHaveBeenCalledTimes(1);
   });
+
+  it("leaves a battery camera's forced starts alone, since a cold one is slow rather than deaf", async () => {
+    const { src, streams, onSessionUnreachable } = source({ warmRetryMs: 20, powered: "battery" });
+    src.attach().on("error", () => undefined);
+
+    await settle(130);
+
+    expect(onSessionUnreachable).not.toHaveBeenCalled();
+    expect(streams[0]!.nudged).toBeGreaterThan(3);
+  });
 });

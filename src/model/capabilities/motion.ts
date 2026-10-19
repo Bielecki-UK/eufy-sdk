@@ -547,7 +547,7 @@ export const MOTION_MEMBERS = {
   aiDetectType: {
     param: MOTION_CMD.AI_DETECT_TYPE,
     type: "string",
-    decode: (raw) => decodeAiDetectTypeParam(raw),
+    decode: decodeAiDetectTypeParam,
     decodedKind: "bitfield",
     provenance: "verified",
     description:

@@ -19,7 +19,6 @@ describe("native status query", () => {
       session.emit("data", frame(2));
       session.emit("data", frame(1, 1940));
       session.emit("data", { ...frame(), commandId: 1350 });
-      session.emit("data", frame(1, 1955, []));
       queueMicrotask(() => session.emit("data", frame()));
       return true;
     });

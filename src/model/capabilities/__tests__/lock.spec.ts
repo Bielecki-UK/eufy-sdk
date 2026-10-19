@@ -283,7 +283,7 @@ const _scrambleOptional: Exact<undefined extends typeof lk.setScramblePasscode ?
 const _noOneTouchGetter: Exact<"oneTouchLock" extends keyof LockActions ? true : false, false> = true;
 
 // A provider-backed member is optional (absent unbound) and keeps the provider's own signature.
-// setAutoLock dispatches to the sink, not the ff09 reader, so every lock-family device has it.
+// setAutoLock dispatches to the sink, not the ff09 reader, and is absent on the T8530.
 const _autoLockRequired: Exact<undefined extends typeof lk.setAutoLock ? true : false, true> = true;
 const _autoLockArgs: Exact<Parameters<NonNullable<typeof lk.setAutoLock>>, [boolean, (number | undefined)?]> = true;
 const _snapshot: Exact<

@@ -57,7 +57,6 @@ const VIDEO_LOCK_CMD = { ACTUATE: 1961, STATUS: 1955, NOTIFY: 1351 } as const;
  * frame carries the member fields — and a generated "not a valid value" message would misreport it.
  */
 function actuate(engage: boolean, ctx: CommandContext, sink: CommandSink): Promise<void> {
-  if (!actuationAvailable(ctx)) return Promise.reject(new Error("lock: native actuation is unverified on this route"));
   if (!ctx.adminUserId || !ctx.shortUserId || (isVideoSmartLock(ctx) && !ctx.accountName)) {
     return Promise.reject(
       new Error(
@@ -129,8 +128,8 @@ async function refreshStatus(
 
 /** Only the two observed settled states carry a boolean. */
 function nativeState(raw: unknown): boolean | undefined {
-  if (raw === 3 || raw === "3") return false;
-  if (raw === 4 || raw === "4") return true;
+  if (raw === "3") return false;
+  if (raw === "4") return true;
   return undefined;
 }
 
@@ -143,10 +142,8 @@ function nativeReport(signal: InboundSignal): Record<string, unknown> | undefine
     signal.json?.cmd !== VIDEO_LOCK_CMD.STATUS
   )
     return undefined;
-  const payload = signal.json.payload;
-  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return undefined;
-  const report = payload as Record<string, unknown>;
-  return report.code === 0 ? report : undefined;
+  const report = signal.json.payload as Record<string, unknown> | undefined;
+  return report?.code === 0 ? report : undefined;
 }
 
 /**

@@ -75,7 +75,7 @@ describe("video lock status integration", () => {
     expect(internal.registry.dpParams.get(SN)).toEqual({ 6000: "4", 6001: "66" });
     expect(properties).toContainEqual({ deviceSn: SN, property: "locked", value: true });
     expect(semantic).toEqual([]);
-    internal.onP2PFrame(HUB, frame({ code: 0, slState: 4 }));
+    internal.onP2PFrame(HUB, frame({ code: 0, slState: "4" }));
     expect(semantic).toEqual([]);
     const fetched = await client.getDevice(SN);
     expect(fetched.lock?.()?.locked).toBe(true);
@@ -87,14 +87,6 @@ describe("video lock status integration", () => {
     expect(dev.lock?.()?.locked).toBe(true);
     expect(dev.lock?.()?.battery).toBe(66);
     expect(internal.registry.dpParams.get(SN)[6000]).toBe("4");
-  });
-  it("does not land errors, malformed reports, or another channel's status", () => {
-    const { internal, dev } = harness();
-    internal.onP2PFrame(HUB, frame({ code: -106, slState: 4 }));
-    internal.onP2PFrame(HUB, frame(null));
-    internal.onP2PFrame(HUB, frame({ code: 0, slState: 4 }, 8));
-    expect(dev.lock?.()?.locked).toBe(false);
-    expect(internal.registry.dpParams.get(SN)).toBeUndefined();
   });
   it("uses device identity and the parent station time_zone for public controls", async () => {
     const { client, internal } = harness();

@@ -1341,8 +1341,7 @@ export class P2PCommandRouter {
           f.commandId === CommandType.CMD_NOTIFY_PAYLOAD &&
           j?.cmd === subCmd &&
           j.payload &&
-          typeof j.payload === "object" &&
-          !Array.isArray(j.payload)
+          typeof j.payload === "object"
         ) {
           cleanup();
           resolve(j.payload as Record<string, unknown>);

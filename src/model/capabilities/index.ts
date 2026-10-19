@@ -1047,6 +1047,7 @@ export type {
   SuctionActions,
   MowerActions,
   LocateActions,
+  SmartDropActions,
 };
 /**
  * The member table each `*Actions` type is DERIVED from (`LockActions = Surface<typeof LOCK_MEMBERS>`),

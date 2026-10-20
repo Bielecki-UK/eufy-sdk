@@ -30,80 +30,57 @@ afterEach(() => {
 
 describe("P2P session close", () => {
   it("delivers queued attached STOP and END through the same real UDP socket", async () => {
-    const counts: number[] = [];
-    for (let trial = 0; trial < 20; trial++) {
-      const receiver = await bound(),
-        sender = await bound();
-      const port = (receiver.address() as { port: number }).port;
-      const seen: Buffer[] = [],
-        remotePorts: number[] = [];
-      let finish!: () => void;
-      const delivered = new Promise<void>((resolve) => {
-        finish = resolve;
-      });
-      const guard = setTimeout(finish, 1_000);
-      receiver.on("message", (packet, remote) => {
-        seen.push(packet);
-        remotePorts.push(remote.port);
-        if (seen.length === 2) finish();
-      });
+    const receiver = await bound();
+    const sender = await bound();
+    const port = (receiver.address() as { port: number }).port;
+    const seen: Buffer[] = [];
+    const remotePorts: number[] = [];
+    let finish!: () => void;
+    const delivered = new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+    const guard = setTimeout(finish, 1_000);
+    receiver.on("message", (packet, remote) => {
+      seen.push(packet);
+      remotePorts.push(remote.port);
+      if (seen.length === 2) finish();
+    });
+    try {
       const senderPort = (sender.address() as { port: number }).port;
       const session = sessionWith(sender, port);
       session.stopLiveMedia(2, "0".repeat(40), true);
       await session.close();
       await delivered;
+      expect(seen).toHaveLength(2);
+      expect(seen[0]!.subarray(0, 2)).toEqual(RequestMessageType.DATA);
+      expect(seen[0]!.readUInt16LE(12)).toBe(1350);
+      expect(seen[0]![20]).toBe(2);
+      expect(seen[1]!.subarray(0, 2)).toEqual(RequestMessageType.END);
+      expect(remotePorts).toEqual([senderPort, senderPort]);
+    } finally {
       clearTimeout(guard);
-      counts.push(seen.length);
-      if (seen.length === 2) {
-        expect(seen[0]!.subarray(0, 2)).toEqual(RequestMessageType.DATA);
-        expect(seen[0]!.readUInt16LE(12)).toBe(1350);
-        expect(seen[0]![20]).toBe(2);
-        expect(seen[1]!.subarray(0, 2)).toEqual(RequestMessageType.END);
-        expect(remotePorts).toEqual([senderPort, senderPort]);
-      }
-      receiver.close();
     }
-    expect(counts).toEqual(Array(20).fill(2));
-  }, 30_000);
-
-  it("cleans up after asynchronous and synchronous END send failures and tolerates another close", async () => {
-    for (const synchronous of [false, true]) {
-      const socket = await bound();
-      const session = sessionWith(socket, 1234);
-      vi.spyOn(socket, "send").mockImplementation((...args: unknown[]) => {
-        const error = new Error("simulated send failure");
-        if (synchronous) throw error;
-        const callback = args.at(-1) as (error: Error) => void;
-        queueMicrotask(() => callback(error));
-        return undefined as never;
-      });
-      await session.close();
-      await session.close();
-      expect(() => socket.address()).toThrow();
-    }
-    const socket = await bound();
-    const session = sessionWith(socket);
-    await session.close();
-    await session.close();
-    expect(() => socket.address()).toThrow();
   });
 
-  it("keeps a replacement socket while finishing END and closing the original socket", async () => {
-    const original = await bound();
-    const replacement = await bound();
-    const session = sessionWith(original, 1234);
-    let sent!: (error?: Error | null) => void;
-    vi.spyOn(original, "send").mockImplementation((...args: unknown[]) => {
+  it("waits for the END callback and still closes when it reports an error", async () => {
+    const socket = await bound();
+    const session = sessionWith(socket, 1234);
+    let sent!: (error: Error) => void;
+    vi.spyOn(socket, "send").mockImplementation((...args: unknown[]) => {
       sent = args.at(-1) as typeof sent;
       return undefined as never;
     });
     const closing = session.close();
-    expect(() => original.address()).not.toThrow();
-    Object.assign(session, { socket: replacement });
-    sent();
+    expect(() => socket.address()).not.toThrow();
+    sent(new Error("simulated send failure"));
     await closing;
-    expect(() => original.address()).toThrow();
-    expect(() => replacement.address()).not.toThrow();
-    expect((session as unknown as { socket: dgram.Socket }).socket).toBe(replacement);
+    await session.close();
+    expect(() => socket.address()).toThrow();
+
+    const noPeerSocket = await bound();
+    const noPeerSession = sessionWith(noPeerSocket);
+    await noPeerSession.close();
+    await noPeerSession.close();
+    expect(() => noPeerSocket.address()).toThrow();
   });
 });

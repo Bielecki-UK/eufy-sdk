@@ -2344,11 +2344,12 @@ export class P2PSession extends EventEmitter {
     this.emit("data", frame);
   }
 
-  private send(addr: Address, type: Buffer, payload?: Buffer, socket = this.socket): void {
+  private send(addr: Address, type: Buffer, payload?: Buffer, socket = this.socket, done?: () => void): void {
     if (!socket) return;
     const packet = frameMessage(type, payload);
     socket.send(packet, addr.port, addr.host, (err) => {
       if (err) this.logger.warn(`[p2p] send err ${addr.host}:${addr.port}`, err.message);
+      done?.();
     });
   }
 
@@ -2376,25 +2377,16 @@ export class P2PSession extends EventEmitter {
     this.unackedLiveStarts.clear();
     this.resetInboundSequencing();
     const socket = this.socket;
-    const peer = this.connectAddress;
-    if (socket && peer) {
-      await new Promise<void>((resolve) => {
-        const sent = (error?: Error | null) => {
-          if (error) this.logger.warn(`[p2p] send err ${peer.host}:${peer.port}`, error.message);
-          resolve();
-        };
-        try {
-          socket.send(frameMessage(RequestMessageType.END), peer.port, peer.host, sent);
-        } catch (error) {
-          sent(error instanceof Error ? error : new Error(String(error)));
-        }
-      });
+    if (socket && this.connectAddress) {
+      await new Promise<void>((resolve) =>
+        this.send(this.connectAddress!, RequestMessageType.END, undefined, socket, resolve),
+      );
     }
     await new Promise<void>((resolve) => {
       if (!socket) return resolve();
       socket.close(() => resolve());
     });
-    if (this.socket === socket) this.socket = undefined;
+    this.socket = undefined;
     this.emit("close");
   }
 }

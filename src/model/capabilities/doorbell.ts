@@ -8,6 +8,40 @@ import type { CapabilityModule } from "./types.js";
 import type { MediaProvider } from "../../core/contracts.js";
 
 /**
+ * The T-codes the app's model map files under a doorbell family (`DOORBELL`, `DOORBELL_2K_T8200`,
+ * `WIRED_DOORBELL_*`, `BATTERY_DOORBELL_*`).
+ */
+const DOORBELL_MODELS: ReadonlySet<string> = new Set([
+  "T820",
+  "T8200",
+  "T8201",
+  "T8202",
+  "T8203",
+  "T8210",
+  "T8212",
+  "T8213",
+  "T8214",
+  "T8220",
+  "T8221",
+  "T8222",
+]);
+
+/**
+ * The app's doorbell device types (`TYPE_DEVICE_DOORBELL` 5, `TYPE_DEVICE_BATTERY_DOORBELL` 7,
+ * `TYPE_DEVICE_BATTERY_DOORBELL_SMALL` 16, `TYPE_DEVICE_BATTERY_DOORBELL_DUAL_8213` 91,
+ * `TYPE_DEVICE_DOORBELL_DUAL_8203` 93, `TYPE_DEVICE_BATTERY_DOORBELL_DUAL_8214` 94). They also cover a
+ * variant code missing from {@link DOORBELL_MODELS}, such as T8210C.
+ */
+const DOORBELL_TYPES: number[] = [
+  DeviceType.DOORBELL,
+  DeviceType.BATTERY_DOORBELL,
+  DeviceType.BATTERY_DOORBELL_2,
+  DeviceType.BATTERY_DOORBELL_PLUS,
+  DeviceType.DOORBELL_SOLO,
+  DeviceType.BATTERY_DOORBELL_PLUS_E340,
+];
+
+/**
  * The P2P **feature-command ids** this doorbell capability drives. Capability-owned wire vocabulary
  * (transport forwards `cmd.param` opaquely; full id→name catalog in the generated
  * `transport/p2p/commands.ts`).
@@ -480,25 +514,6 @@ export const DOORBELL_MEMBERS = {
   ),
 } as const satisfies Members;
 
-/**
- * The T-codes the app's model map files under a doorbell family (`DOORBELL`, `DOORBELL_2K_T8200`,
- * `WIRED_DOORBELL_*`, `BATTERY_DOORBELL_*`).
- */
-const DOORBELL_MODELS: ReadonlySet<string> = new Set([
-  "T820",
-  "T8200",
-  "T8201",
-  "T8202",
-  "T8203",
-  "T8210",
-  "T8212",
-  "T8213",
-  "T8214",
-  "T8220",
-  "T8221",
-  "T8222",
-]);
-
 export const DOORBELL: CapabilityModule = {
   capability: "doorbell",
   description: "Doorbell chime / ringtone configuration (ring press is an event, not a param).",
@@ -506,22 +521,12 @@ export const DOORBELL: CapabilityModule = {
   properties: propertiesOf(DOORBELL_MEMBERS),
   /**
    * Doorbells self-report no param of their own (the 1702-1719 settings also arrive from eufyCams), and
-   * the cloud record names no product, so detection keys off the app's own tables: the models its model
-   * map files under a doorbell family ({@link DOORBELL_MODELS}), and its doorbell types
-   * (`TYPE_DEVICE_DOORBELL` 5, `TYPE_DEVICE_BATTERY_DOORBELL` 7, `TYPE_DEVICE_BATTERY_DOORBELL_SMALL` 16,
-   * `TYPE_DEVICE_BATTERY_DOORBELL_DUAL_8213` 91, `TYPE_DEVICE_DOORBELL_DUAL_8203` 93,
-   * `TYPE_DEVICE_BATTERY_DOORBELL_DUAL_8214` 94), which also cover a variant code such as T8210C.
+   * the cloud record names no product, so detection keys off the app's own tables:
+   * {@link DOORBELL_MODELS} and {@link DOORBELL_TYPES}.
    */
   detection: {
     detect: (rec) => rec.model !== undefined && DOORBELL_MODELS.has(rec.model.toUpperCase()),
-    deviceTypes: [
-      DeviceType.DOORBELL,
-      DeviceType.BATTERY_DOORBELL,
-      DeviceType.BATTERY_DOORBELL_2,
-      DeviceType.BATTERY_DOORBELL_PLUS,
-      DeviceType.DOORBELL_SOLO,
-      DeviceType.BATTERY_DOORBELL_PLUS_E340,
-    ],
+    deviceTypes: DOORBELL_TYPES,
     modelHints: [/doorbell/i],
   },
   /**

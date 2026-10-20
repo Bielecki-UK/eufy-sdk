@@ -59,6 +59,8 @@ export const ResponseMessageType = {
   /** A relay endpoint to register with: one address record, then `[handle:4 BE]`. */
   RLY_TO: Buffer.from([0xf1, 0x82]),
   CAM_ID: Buffer.from([0xf1, 0x42]),
+  /** A lookup server's answer to a P2P request: `[result:1]` first, 0 when the request is accepted. */
+  P2P_REQ_ACK: Buffer.from([0xf1, 0x21]),
   /**
    * The device's own address record, sent in answer to CHECK_CAM ahead of CAM_ID: its 20-byte device id, one
    * record in `encodeAddress`'s shape naming the address it answers from, then 8 zero bytes (44-byte payload).
@@ -307,8 +309,9 @@ export function buildLookupWithKeyPayload2(p2pDid: string, dskKey: string): Buff
 }
 
 /** Encode an address as `[flags:2 BE=0x0002][port:2 LE][ip:4 reversed][pad:8]` — same shape as a
- * LOCAL_LOOKUP_RESP/CAM_ID record, embedded here as a self-reported candidate. Reverse-engineered
- * byte-exact from a live capture of the real app's own LOOKUP_WITH_KEY request. */
+ * LOCAL_LOOKUP_RESP/CAM_ID record. It carries the self-reported candidate in a LOOKUP_WITH_KEY request
+ * (reverse-engineered byte-exact from a live capture of the real app's own request) and the relay address
+ * in a RLY_REQ. */
 function encodeAddress(host: string, port: number): Buffer {
   const out = Buffer.alloc(16);
   out.writeUInt16BE(0x0002, 0); // constant in every captured request; purpose unconfirmed
@@ -537,13 +540,13 @@ export function parseLookupAddr(msg: Buffer): Address {
   return readAddress(msg, 4);
 }
 
-/** The relay servers a LIST_REQ_ACK names, each once, in the order listed; records past the message's end are dropped. */
+/** The relay servers a LIST_REQ_ACK names, in the order listed, without the unspecified address; records past the message's end are dropped. */
 export function parseRelayList(msg: Buffer): Address[] {
   const out: Address[] = [];
   const count = msg.length > 4 ? msg[4] : 0;
   for (let i = 0; i < count && 8 + 16 * (i + 1) <= msg.length; i++) {
     const addr = readAddress(msg, 8 + 16 * i);
-    if (addr.host !== "0.0.0.0" && !out.some((a) => a.host === addr.host && a.port === addr.port)) out.push(addr);
+    if (addr.host !== "0.0.0.0") out.push(addr);
   }
   return out;
 }

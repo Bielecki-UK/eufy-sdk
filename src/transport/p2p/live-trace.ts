@@ -51,11 +51,6 @@ export type LiveTrace =
    */
   | { phase: "lookup-channels"; local: boolean; cloud: boolean; cloudMissing?: "dsk-key" | "cloud-addresses" }
   /**
-   * The path a connect came up over: `relay` when a PPCS relay's RLY_RDY completed it, `direct` for a device
-   * that answered the hole-punch or the local lookup itself. Once per connect.
-   */
-  | { phase: "session-path"; via: "direct" | "relay" }
-  /**
    * Work on a station is holding for its session to connect, with the milliseconds it will wait.
    *
    * The earliest phase there is: nothing else on a station can be attempted until its session is up, and a

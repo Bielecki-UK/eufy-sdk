@@ -2,6 +2,7 @@ import dgram from "node:dgram";
 import { once } from "node:events";
 import { describe, expect, it, vi } from "vitest";
 import { P2PSession } from "../p2p-session.js";
+import { LIVE_TRACE_MESSAGE } from "../live-trace.js";
 import {
   RequestMessageType,
   ResponseMessageType,
@@ -45,13 +46,14 @@ describe("PPCS relay fallback", () => {
     let requested: Buffer | undefined;
     let pingPort: number | undefined;
     const connected = vi.fn();
+    const debug = vi.fn();
     const session = new P2PSession({
       stationSn: STATION_SN,
       p2pDid: P2P_DID,
       dskKey: "0".repeat(20),
       cloudAddresses: [{ host: "127.0.0.1", port: cloud.address().port }],
       noBroadcast: true,
-      logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+      logger: { debug, info: vi.fn(), warn: vi.fn(), error: vi.fn() },
     });
     session.on("error", () => undefined);
     session.on("connect", connected);
@@ -85,6 +87,11 @@ describe("PPCS relay fallback", () => {
       expect(requested!.subarray(24, 40)).toEqual(loopbackRecord(relayed.address().port));
       expect(requested!.readUInt32BE(40)).toBe(MARK);
       await vi.waitFor(() => expect(pingPort).toBeDefined());
+      const paths = debug.mock.calls
+        .filter(([message]) => message === LIVE_TRACE_MESSAGE)
+        .map(([, trace]) => trace)
+        .filter((trace) => trace.phase === "session-path");
+      expect(paths).toEqual([expect.objectContaining({ via: "relay" })]);
     } finally {
       await session.close();
       cloud.close();
@@ -129,6 +136,46 @@ describe("PPCS relay fallback", () => {
     });
     expect(connected).toHaveBeenCalledOnce();
     void session.close().catch(() => undefined);
+  });
+});
+
+describe("a connect that times out", () => {
+  it("names the relay step it was waiting on", async () => {
+    const cloud = await peer();
+    vi.useFakeTimers({ toFake: ["setTimeout", "setInterval"] });
+    const errors: Error[] = [];
+    const session = new P2PSession({
+      stationSn: STATION_SN,
+      p2pDid: P2P_DID,
+      dskKey: "0".repeat(20),
+      cloudAddresses: [{ host: "127.0.0.1", port: cloud.address().port }],
+      noBroadcast: true,
+    });
+    session.on("error", (error: Error) => errors.push(error));
+    try {
+      await session.connect();
+      await vi.advanceTimersByTimeAsync(15_000);
+      expect(errors.map((e) => e.message)).toEqual([`P2P connect timeout for ${STATION_SN} (relay: list)`]);
+    } finally {
+      vi.useRealTimers();
+      await session.close();
+      cloud.close();
+    }
+  });
+
+  it("says the relay was not available without a cloud lookup", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "setInterval"] });
+    const errors: Error[] = [];
+    const session = new P2PSession({ stationSn: STATION_SN, p2pDid: P2P_DID, noBroadcast: true });
+    session.on("error", (error: Error) => errors.push(error));
+    try {
+      await session.connect();
+      await vi.advanceTimersByTimeAsync(15_000);
+      expect(errors.map((e) => e.message)).toEqual([`P2P connect timeout for ${STATION_SN} (relay: no cloud lookup)`]);
+    } finally {
+      vi.useRealTimers();
+      await session.close();
+    }
   });
 });
 

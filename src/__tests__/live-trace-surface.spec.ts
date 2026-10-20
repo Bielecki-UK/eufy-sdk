@@ -39,6 +39,7 @@ describe("live-trace vocabulary at the package entry point", () => {
       "datagram-gap": true,
       "sequence-restart": true,
       "lookup-channels": true,
+      "session-path": true,
       "session-connect-wait": true,
       "session-connected": true,
       "session-unreachable": true,

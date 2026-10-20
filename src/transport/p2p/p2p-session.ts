@@ -482,6 +482,8 @@ export class P2PSession extends EventEmitter {
    * then the relay-ready the device's registration produces (`request`, re-sending RLY_REQ meanwhile).
    */
   private relay?: { step: "list" | "hello" | "port" | "request"; relays: Address[]; via?: Address; mark?: number };
+  /** Whether this connect answered a RLY_TO with RLY_PKTs. */
+  private relayRegistered = false;
   /** Local outbound IPv4 reported inside LOOKUP_WITH_KEY requests. */
   private selfHost?: string;
   /**
@@ -847,6 +849,7 @@ export class P2PSession extends EventEmitter {
     this.connecting = true;
     this.closed = false;
     this.connectionGeneration += 1;
+    this.relayRegistered = false;
     this.resetInboundSequencing();
     if (!this.level2KeyServes("set-payload")) {
       this.level2Pending = this.cfg.resolveCipherKey !== undefined;
@@ -895,7 +898,7 @@ export class P2PSession extends EventEmitter {
       }, RELAY_FALLBACK_MS);
     this.connectTimer = setTimeout(() => {
       if (!this.connected) {
-        this.emit("error", new Error(`P2P connect timeout for ${this.cfg.stationSn}`));
+        this.emit("error", new Error(`P2P connect timeout for ${this.cfg.stationSn} (${this.relayProgress()})`));
         void this.close();
       }
     }, CONNECT_TIMEOUT_MS);
@@ -987,6 +990,16 @@ export class P2PSession extends EventEmitter {
       );
     }
     this.sendRelay();
+  }
+
+  /**
+   * How far this connect got towards a relay: the handshake step it was waiting on (`list` meaning no lookup
+   * server named a relay), `not started` where it had not fallen back yet, or `no cloud lookup` where it could
+   * not; plus whether a RLY_TO was answered.
+   */
+  private relayProgress(): string {
+    const step = this.relay?.step ?? (this.cloudLookup ? "not started" : "no cloud lookup");
+    return `relay: ${step}${this.relayRegistered ? "; RLY_TO registered" : ""}`;
   }
 
   /**
@@ -1096,11 +1109,12 @@ export class P2PSession extends EventEmitter {
         const payload = buildRelayPacketPayload(to.handle, this.cfg.p2pDid);
         for (let i = 0; i < RELAY_PACKET_COPIES; i++)
           this.send(to.address, RequestMessageType.RLY_PKT, payload, socket);
+        this.relayRegistered = true;
       }
     } else if (hasHeader(msg, ResponseMessageType.RLY_RDY)) {
       if (msg.subarray(4, 24).equals(p2pDidToBuffer(this.cfg.p2pDid))) {
         this.logger.debug(`[p2p] ${this.cfg.stationSn} RLY_RDY from relay ${rinfo.address}:${rinfo.port}`);
-        this.onConnected({ host: rinfo.address, port: rinfo.port }, socket);
+        this.onConnected({ host: rinfo.address, port: rinfo.port }, socket, "relay");
       }
     } else if (
       hasHeader(msg, ResponseMessageType.LIST_REQ_ACK) ||
@@ -1179,7 +1193,7 @@ export class P2PSession extends EventEmitter {
     this.probeSockets = [];
   }
 
-  private onConnected(addr: Address, socket: dgram.Socket): void {
+  private onConnected(addr: Address, socket: dgram.Socket, via: "direct" | "relay" = "direct"): void {
     if (this.connected) return;
     this.stopPunchProbes(socket);
     if (this.socket !== socket) {
@@ -1199,6 +1213,7 @@ export class P2PSession extends EventEmitter {
     if (this.relayTimer) clearTimeout(this.relayTimer);
     this.relay = undefined;
     this.logger.debug(`[p2p] ${this.cfg.stationSn} connected ${addr.host}:${addr.port}`);
+    this.trace({ phase: "session-path", via });
 
     // Nudge the station to start reporting, then heartbeat.
     this.sendCommand(CMD_GATEWAYINFO);

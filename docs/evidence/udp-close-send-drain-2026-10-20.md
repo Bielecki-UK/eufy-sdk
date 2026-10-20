@@ -30,7 +30,8 @@ not establish behavior on every Node version or operating system.
 
 The receiver waits on packet events with a bounded guard. The upstream test uses
 a one-second failure guard per repetition, not a delay in the implementation.
-Additional cases cover missing peer, repeated close and a send-callback error.
+Additional regressions cover asynchronous and synchronous send errors, missing peer,
+repeated close, and preserving a replacement socket while the original END send is pending.
 
 The [Node UDP send callback](https://nodejs.org/api/dgram.html#socketsendmsg-offset-length-port-address-callback)
 and [socket close callback](https://nodejs.org/api/dgram.html#socketclosecallback)

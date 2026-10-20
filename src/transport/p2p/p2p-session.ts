@@ -2352,6 +2352,7 @@ export class P2PSession extends EventEmitter {
     });
   }
 
+  /** Finish the END send on the current socket before closing it; send completion is not a peer ACK. */
   async close(): Promise<void> {
     if (this.closed) return;
     this.closed = true;

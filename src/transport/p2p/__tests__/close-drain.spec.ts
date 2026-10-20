@@ -24,9 +24,7 @@ afterEach(() => {
   for (const socket of cleanup.splice(0)) {
     try {
       socket.close();
-    } catch {
-      /* Socket already closed by the session. */
-    }
+    } catch {}
   }
 });
 
@@ -68,7 +66,21 @@ describe("P2P session close", () => {
     expect(counts).toEqual(Array(20).fill(2));
   }, 30_000);
 
-  it("closes without a peer and tolerates repeated close", async () => {
+  it("cleans up after asynchronous and synchronous END send failures and tolerates another close", async () => {
+    for (const synchronous of [false, true]) {
+      const socket = await bound();
+      const session = sessionWith(socket, 1234);
+      vi.spyOn(socket, "send").mockImplementation((...args: unknown[]) => {
+        const error = new Error("simulated send failure");
+        if (synchronous) throw error;
+        const callback = args.at(-1) as (error: Error) => void;
+        queueMicrotask(() => callback(error));
+        return undefined as never;
+      });
+      await session.close();
+      await session.close();
+      expect(() => socket.address()).toThrow();
+    }
     const socket = await bound();
     const session = sessionWith(socket);
     await session.close();
@@ -76,15 +88,22 @@ describe("P2P session close", () => {
     expect(() => socket.address()).toThrow();
   });
 
-  it("completes close when the END send callback reports an error", async () => {
-    const socket = await bound();
-    const session = sessionWith(socket, 1234);
-    vi.spyOn(socket, "send").mockImplementation((...args: unknown[]) => {
-      const callback = args.at(-1) as (error: Error) => void;
-      queueMicrotask(() => callback(new Error("simulated send failure")));
+  it("keeps a replacement socket while finishing END and closing the original socket", async () => {
+    const original = await bound();
+    const replacement = await bound();
+    const session = sessionWith(original, 1234);
+    let sent!: (error?: Error | null) => void;
+    vi.spyOn(original, "send").mockImplementation((...args: unknown[]) => {
+      sent = args.at(-1) as typeof sent;
       return undefined as never;
     });
-    await session.close();
-    expect(() => socket.address()).toThrow();
+    const closing = session.close();
+    expect(() => original.address()).not.toThrow();
+    Object.assign(session, { socket: replacement });
+    sent();
+    await closing;
+    expect(() => original.address()).toThrow();
+    expect(() => replacement.address()).not.toThrow();
+    expect((session as unknown as { socket: dgram.Socket }).socket).toBe(replacement);
   });
 });

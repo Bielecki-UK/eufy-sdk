@@ -1,7 +1,7 @@
 import { asBool, coerceEnumValue } from "../../core/util.js";
 import { DeviceType } from "../device-types.js";
 import { isIndoorCamera, isIndoorCamMini, isIndoorPanTiltS350 } from "../device-family.js";
-import { setScalar, setPayload, setJson, hasCapability } from "./access.js";
+import { setScalar, setPayload, setJson, isCameraCodec, hasCapability } from "./access.js";
 import { AUDIO_CMD } from "./audio.js";
 import { cameraPowerTier } from "./battery.js";
 import { accepts, propertiesOf, provided, type Members, type Surface, type MemberDeps } from "./members.js";
@@ -507,17 +507,6 @@ function enablementReflection(
     };
   }
   return undefined;
-}
-
-/**
- * Whether the device is a camera by codec, not only by capability.
- *
- * The T8530 video lock resolves to the `lock` codec and carries `camera` for its live view, which is the
- * one camera surface confirmed on it. Every other member here is confirmed on camera-codec devices only,
- * so each one is withheld where this answers false.
- */
-function isCameraCodec(ctx: AvailabilityContext): boolean {
-  return ctx.codec === "camera";
 }
 
 /**

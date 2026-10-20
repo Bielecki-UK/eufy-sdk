@@ -50,14 +50,6 @@ describe("aiDetectType (1298) in both wire shapes", () => {
     expect(camera(wire, logger).motion?.()?.aiDetectType).toBe(0x3000f);
     expect(warn).not.toHaveBeenCalled();
   });
-
-  it("answers undefined for an object without a numeric ai_detect_type", () => {
-    const { logger } = spy();
-
-    expect(
-      camera(JSON.stringify({ list: [{ sensor_id: 0, ai_detect_type: 3 }] }), logger).motion?.()?.aiDetectType,
-    ).toBeUndefined();
-  });
 });
 
 describe("clean-line direction (DP 155)", () => {

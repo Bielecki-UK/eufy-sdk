@@ -56,7 +56,6 @@ export const MODEL_REGISTRY: Readonly<Record<string, RegistryEntry>> = {
   T8210C: { codec: "camera", caps: ["battery"], name: "Video Doorbell" },
   // Confirmed against a real owned unit (named "Doorbell"): Video Doorbell Dual.
   T8214: { codec: "camera", caps: ["battery"], name: "Video Doorbell Dual" },
-  // Battery Video Doorbell Dual, vendor deviceType 91 (BATTERY_DOORBELL_PLUS), reported by two users.
   T8213: { codec: "camera", caps: ["battery"], name: "Video Doorbell Dual" },
   // Confirmed against a real owned unit: the mains-powered Wired Doorbell 2K. No `battery` row
   // member on purpose — this model is wired, so the codec baseline plus inference is the whole

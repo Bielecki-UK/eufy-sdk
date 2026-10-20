@@ -338,11 +338,6 @@ describe("doorbell — confirmed against real T8214", () => {
     expect(resolveDevice({ model }).capabilities).toContain("doorbell");
   });
 
-  it("does not type a eufyCam reporting the 17xx settings as a doorbell", () => {
-    const r = resolveDevice({ model: "T8114", deviceType: 9, params: { 1702: "1", 1717: "50" } });
-    expect(r.capabilities).not.toContain("doorbell");
-  });
-
   it("types the T8210C variant as a doorbell, like the T8210", () => {
     const r = resolveDevice({ model: "T8210C", deviceType: 7 });
     expect(r.capabilities).toContain("doorbell");

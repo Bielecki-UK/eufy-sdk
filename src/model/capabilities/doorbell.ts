@@ -29,8 +29,7 @@ const DOORBELL_MODELS: ReadonlySet<string> = new Set([
 /**
  * The app's doorbell device types (`TYPE_DEVICE_DOORBELL` 5, `TYPE_DEVICE_BATTERY_DOORBELL` 7,
  * `TYPE_DEVICE_BATTERY_DOORBELL_SMALL` 16, `TYPE_DEVICE_BATTERY_DOORBELL_DUAL_8213` 91,
- * `TYPE_DEVICE_DOORBELL_DUAL_8203` 93, `TYPE_DEVICE_BATTERY_DOORBELL_DUAL_8214` 94). They also cover a
- * variant code missing from {@link DOORBELL_MODELS}, such as T8210C.
+ * `TYPE_DEVICE_DOORBELL_DUAL_8203` 93, `TYPE_DEVICE_BATTERY_DOORBELL_DUAL_8214` 94).
  */
 const DOORBELL_TYPES: number[] = [
   DeviceType.DOORBELL,
@@ -525,7 +524,7 @@ export const DOORBELL: CapabilityModule = {
    * {@link DOORBELL_MODELS} and {@link DOORBELL_TYPES}.
    */
   detection: {
-    detect: (rec) => rec.model !== undefined && DOORBELL_MODELS.has(rec.model.toUpperCase()),
+    detect: (rec) => DOORBELL_MODELS.has(rec.model ?? ""),
     deviceTypes: DOORBELL_TYPES,
     modelHints: [/doorbell/i],
   },

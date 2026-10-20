@@ -107,7 +107,7 @@ const RECEIVE_BUFFER_BYTES = 4 * 1024 * 1024;
  * elsewhere would outlive the connection it waits on and charge the difference to every failure.
  *
  * Thirty seconds is the budget the vendor app gives its own remote connect, which runs the hole-punch and,
- * after {@link RELAY_AFTER_ACKED_ROUNDS} acknowledged rounds, the relay handshake inside it.
+ * once the lookup server has acknowledged the P2P request for 24 lookup rounds, the relay handshake inside it.
  */
 export const CONNECT_TIMEOUT_MS = 30_000;
 /**

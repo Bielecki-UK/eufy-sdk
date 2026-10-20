@@ -178,7 +178,7 @@ export class RtcSession extends EventEmitter<RtcSessionEvents> {
     }
     this.signaling.close();
     this.peer.close();
-    this.settleAuth(err ?? new Error("RTC session closed while waiting for signalling auth"));
+    this.settleAuth(new Error("RTC session closed while waiting for signalling auth"));
     this.announceClose(err);
   }
 
@@ -247,15 +247,12 @@ export class RtcSession extends EventEmitter<RtcSessionEvents> {
     }
   }
 
-  /**
-   * A `scall` status: `100` grants the relay, `200` is acknowledged, `486`/`408` fail the session. The
-   * relay is recorded only once the peer is built on it, so a hub offer after a failed build never reaches
-   * an absent peer; that failure ends the session.
-   */
+  /** A `scall` status: `100` grants the relay, `200` is acknowledged, `486`/`408` fail the session. */
   private async onCall(payload: CallPayload): Promise<void> {
     if (this.closed) return;
     const status = payload.status;
     if (status === 100 && payload.turn) {
+      this.turn = payload.turn;
       try {
         await this.peer.init(payload.turn);
       } catch (e) {
@@ -264,7 +261,6 @@ export class RtcSession extends EventEmitter<RtcSessionEvents> {
         this.shutdown(err);
         return;
       }
-      this.turn = payload.turn;
       return;
     }
     if (status === 200) {

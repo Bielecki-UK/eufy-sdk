@@ -456,8 +456,8 @@ export class RtcCommandRouter {
   /**
    * One bounded bring-up: the session is up when its command channel opens, and it fails, with the
    * session closed and every listener gone, when `connect()` throws, the session closes first (rejecting
-   * with the failure that closed it, when it carries one), or {@link CONNECT_TIMEOUT_MS} passes. A single promise, so an early failure cannot leave a second one
-   * rejecting unheard.
+   * with the failure that closed it, when it carries one), or {@link CONNECT_TIMEOUT_MS} passes. A single
+   * promise, so an early failure cannot leave a second one rejecting unheard.
    */
   private bringUp(sn: string, session: RtcSession): Promise<void> {
     return new Promise<void>((resolve, reject) => {

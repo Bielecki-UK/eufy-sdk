@@ -2374,12 +2374,26 @@ export class P2PSession extends EventEmitter {
     this.liveStartRetransmitTimer = undefined;
     this.unackedLiveStarts.clear();
     this.resetInboundSequencing();
-    if (this.connectAddress) this.send(this.connectAddress, RequestMessageType.END);
+    const socket = this.socket;
+    const peer = this.connectAddress;
+    if (socket && peer) {
+      await new Promise<void>((resolve) => {
+        const sent = (error?: Error | null) => {
+          if (error) this.logger.warn(`[p2p] send err ${peer.host}:${peer.port}`, error.message);
+          resolve();
+        };
+        try {
+          socket.send(frameMessage(RequestMessageType.END), peer.port, peer.host, sent);
+        } catch (error) {
+          sent(error instanceof Error ? error : new Error(String(error)));
+        }
+      });
+    }
     await new Promise<void>((resolve) => {
-      if (!this.socket) return resolve();
-      this.socket.close(() => resolve());
+      if (!socket) return resolve();
+      socket.close(() => resolve());
     });
-    this.socket = undefined;
+    if (this.socket === socket) this.socket = undefined;
     this.emit("close");
   }
 }

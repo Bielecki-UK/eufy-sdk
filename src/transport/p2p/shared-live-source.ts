@@ -17,8 +17,7 @@
  *
  * Per consumer: a bounded queue with **drop-to-keyframe** backpressure — a slow consumer that
  * overflows drops its backlog and resyncs at the next IDR, never stalling upstream or its peers.
- * On `attach()` the last cached keyframe is replayed (keyframe-prime) so a new consumer decodes
- * immediately instead of waiting a full GOP.
+ * An ordinary `attach()` begins at the next live keyframe, preserving its dependent-picture chain.
  *
  * Transport-only: speaks {@link LiveStreamHandle} + {@link LiveVideoFrame}, never a capability.
  *
@@ -482,7 +481,8 @@ export class SharedLiveSource {
 
   /**
    * Attach a new consumer. Warms the stream on the first attach (or cancels a pending linger teardown
-   * and reuses the warm stream), then replays the cached keyframe so the consumer can decode at once.
+   * and reuses the warm stream). Delivery starts at the next live keyframe so every dependent
+   * picture follows its reference pictures without a gap from a cached keyframe.
    */
   attach(): Consumer {
     return this.attachConsumer(true);
@@ -498,10 +498,11 @@ export class SharedLiveSource {
     return { consumer, buffered: this.bufferedMedia(seconds) };
   }
 
-  private attachConsumer(prime: boolean): Consumer {
+  private attachConsumer(waitForKeyframe: boolean): Consumer {
     if (this.disposed) throw new Error("SharedLiveSource is disposed");
     const wasEmpty = this.consumers.size === 0;
     const consumer = new ConsumerImpl((c) => this.onDetach(c), this.maxQueue);
+    consumer.awaitingKeyframe = waitForKeyframe;
     this.consumers.add(consumer);
     if (wasEmpty) this.opts.onActive?.();
 
@@ -517,9 +518,6 @@ export class SharedLiveSource {
     if (!this.stream) this.warm();
     else this.watchReusedStream();
 
-    // Keyframe-prime: stage the last IDR so a joining consumer decodes without a full GOP wait. The
-    // consumer replays it the moment a "video" listener subscribes (live() is async — see prime()).
-    if (prime && this.lastKeyframe) consumer.prime(this.lastKeyframe);
     return consumer;
   }
 

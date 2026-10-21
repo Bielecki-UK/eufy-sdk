@@ -93,32 +93,31 @@ describe("SharedLiveSource", () => {
     expect(last().stopped).toBe(0);
   });
 
-  it("keyframe-primes a late joiner with the cached IDR when it subscribes", async () => {
-    const { source, last } = mk();
-    source.attach();
-    last().video(frame(true)); // caches the keyframe
-    const b = source.attach();
-    expect(b.primed).toBe(true);
-    const got: LiveVideoFrame[] = [];
-    b.on("video", (f) => got.push(f)); // subscribing triggers the staged prime
-    await Promise.resolve(); // let the queued microtask deliver the primed keyframe
-    expect(got).toHaveLength(1);
-    expect(got[0].keyframe).toBe(true);
-  });
-
-  it("delivers the prime even when the listener attaches a full tick after attach() (async join)", async () => {
-    const { source, last } = mk();
-    source.attach();
-    last().video(frame(true));
-    const b = source.attach();
-    // Simulate the real async live() gap: several ticks pass before the caller subscribes.
-    await Promise.resolve();
-    await Promise.resolve();
-    const got: LiveVideoFrame[] = [];
-    b.on("video", (f) => got.push(f));
-    await Promise.resolve();
-    expect(got[0]?.keyframe).toBe(true); // the cached IDR was NOT lost to a premature microtask
-  });
+  it.each(["h264", "h265"] as const)(
+    "starts a late %s join at the next live keyframe without skipping references",
+    async (codec) => {
+      const { source, last } = mk();
+      source.attach();
+      const cached = { ...frame(true), codec };
+      last().video(cached);
+      last().video({ ...frame(false, 1), codec });
+      last().video({ ...frame(false, 2), codec });
+      const joined = source.attach();
+      const got: LiveVideoFrame[] = [];
+      joined.on("video", (value) => got.push(value));
+      await Promise.resolve();
+      last().video({ ...frame(false, 3), codec });
+      expect(got).toEqual([]);
+      expect(joined.awaitingKeyframe).toBe(true);
+      const next = { ...frame(true), codec };
+      const dependent = { ...frame(false, 4), codec };
+      last().video(next);
+      last().video(dependent);
+      expect(got).toEqual([next, dependent]);
+      expect(joined.awaitingKeyframe).toBe(false);
+      source.dispose();
+    },
+  );
 
   it("fans one upstream frame to every consumer", () => {
     const { source, last } = mk();

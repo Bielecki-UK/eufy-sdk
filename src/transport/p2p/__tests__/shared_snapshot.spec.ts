@@ -88,7 +88,13 @@ describe("captureSnapshotFromShared (V6 snapshot as consumer)", () => {
     streams[0].video(frame());
     const held = source.consumerCount;
 
-    const capture = captureSnapshotFromShared(source, { timeoutMs: 1000, ffmpegPath: executable });
+    const capture = captureSnapshotFromShared(source, {
+      timeoutMs: 1000,
+      ffmpegPath: executable,
+      skipKeyframes: 0,
+      collectMs: 0,
+    });
+    streams[0].video(frame());
     expect(source.consumerCount).toBe(held + 1);
     await settle(300);
 

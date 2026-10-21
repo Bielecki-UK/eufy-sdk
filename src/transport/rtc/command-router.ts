@@ -1,8 +1,8 @@
 /**
  * RTC command router: drives a station over the portal's WebRTC data channel instead of P2P.
  *
- * The T9000 answers no P2P lookup, but it accepts the portal's control channel: sign → WS join → scall →
- * SDP answer → ICE over the relay the hub grants → DTLS → SCTP data channels, with commands riding
+ * The T9000 answers no P2P lookup, but it accepts the portal's control channel: sign â†’ WS join â†’ scall â†’
+ * SDP answer â†’ ICE over the relay the hub grants â†’ DTLS â†’ SCTP data channels, with commands riding
  * `WebrtcDataChannel` as portal packets (see {@link buildPortalPacket}).
  *
  * `set-payload` rides the `1350` SET_PAYLOAD envelope, inner `{account_id, cmd, mValue3, payload}`;
@@ -218,29 +218,31 @@ export class RtcCommandRouter {
       route.stationSn,
       (session) => new RtcCallLiveStream(session, this.deps.logger),
       `record is not available for ${route.stationSn} over a portal call`,
-      { warmTimeoutMs: 45_000 },
+      45_000,
     );
   }
 
   /** NVR media uses a dedicated call per camera, independent of station commands. */
-  nvrMediaProviderFor(route: RtcLiveRoute, views: readonly number[] = [0]): MediaProvider {
-    return this.callMediaProviderFor(
-      route,
-      route.cameraSn,
-      (session, accountId, view) =>
-        new RtcLiveStream({
-          session,
-          seg: new SegmentCounter(),
-          stationSn: route.stationSn,
-          channel: route.channel,
-          accountId,
-          logger: this.deps.logger,
-          nvr: true,
-          view,
-        }),
-      "record is not available over an NVR portal call",
-      { views },
-    );
+  nvrMediaProviderFor(route: RtcLiveRoute, views: readonly number[]): MediaProvider {
+    return {
+      ...this.callMediaProviderFor(
+        route,
+        route.cameraSn,
+        (session, accountId, view) =>
+          new RtcLiveStream({
+            session,
+            seg: new SegmentCounter(),
+            stationSn: route.stationSn,
+            channel: route.channel,
+            accountId,
+            logger: this.deps.logger,
+            nvr: true,
+            view,
+          }),
+        "record is not available over an NVR portal call",
+      ),
+      views,
+    };
   }
 
   /** Share a dedicated-call source and its consumer operations under one route key. */
@@ -249,13 +251,11 @@ export class RtcCommandRouter {
     key: string,
     makeStream: (session: RtcSession, accountId: string, view: number) => LiveStreamHandle,
     recordError: string,
-    options: { warmTimeoutMs?: number; views?: readonly number[] } = {},
+    warmTimeoutMs?: number,
   ): MediaProvider {
-    const views = Object.freeze([...(options.views ?? [0])]);
     const sourceFor = (opts: SharedSourceHints & AbortableCall & MediaSourceSelection = {}): SharedLiveSource => {
       opts.signal?.throwIfAborted();
       const view = opts.view ?? 0;
-      if (!views.includes(view)) throw new RangeError(`rtc: unsupported optical view ${view}`);
       const sourceKey = view === 0 ? key : `${key}:view:${view}`;
       let source = this.callSources.get(sourceKey);
       if (!source) {
@@ -270,14 +270,13 @@ export class RtcCommandRouter {
           logger: this.deps.logger,
           powered: opts.powered,
           preBufferSeconds: opts.preBufferSeconds,
-          warmTimeoutMs: options.warmTimeoutMs,
+          warmTimeoutMs,
         });
         this.callSources.set(sourceKey, source);
       }
       return source;
     };
     return {
-      views,
       live: async (opts) => attachUnlessAborted(sourceFor(opts), opts?.signal),
       openReadable: async (opts) => openReadableFromConsumer(attachUnlessAborted(sourceFor(opts), opts?.signal), opts),
       snapshotLive: async (opts) =>

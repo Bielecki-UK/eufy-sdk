@@ -135,6 +135,45 @@ function viewFrame(lastByte: number): Buffer {
   return Buffer.concat([buildPortalHeader(1300, body.length, 101, 1), body]);
 }
 
+describe("public non-NVR optical view boundary", () => {
+  it.each([
+    ["T8223", "Synthetic Video Doorbell C31"],
+    ["T8425", "Synthetic Floodlight Cam E340"],
+  ])("keeps %s view discovery absent and refuses secondary pulls in the model", async (model, name) => {
+    const { client, internals, p2p } = fixture(model, name);
+    internals.registry.devices = [
+      {
+        sn: CAMERA,
+        model,
+        name,
+        category: "eufy_security",
+        deviceClass: "camera",
+        api: "mega",
+        realtime: "p2p",
+        stationSn: CAMERA,
+        params: {},
+        raw: { parent_sn: CAMERA, member: { admin_user_id: "synthetic-admin" } },
+      },
+    ] as EufyDevice[];
+    const provider = { live: vi.fn(), openReadable: vi.fn(), snapshotLive: vi.fn(), record: vi.fn() };
+    p2p.mockReturnValue(provider);
+    const connected = vi.spyOn(RtcSession.prototype, "connect");
+    try {
+      const camera = (await client.getDevice(CAMERA)).camera!()!;
+      expect(camera.views).toBeUndefined();
+      for (const method of ["live", "openReadable", "snapshotLive"] as const) {
+        await expect(camera[method]!({ view: 1 })).rejects.toThrow("camera: unsupported optical view 1");
+      }
+      expect(connected).not.toHaveBeenCalled();
+      expect(provider.live).not.toHaveBeenCalled();
+      expect(provider.openReadable).not.toHaveBeenCalled();
+      expect(provider.snapshotLive).not.toHaveBeenCalled();
+    } finally {
+      internals.rtc.close();
+    }
+  });
+});
+
 describe("public NVR optical view selection", () => {
   it.each([
     ["T8E00", "Synthetic PoE Bullet PTZ Cam S4", [0, 1]],

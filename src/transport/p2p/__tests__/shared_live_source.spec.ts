@@ -1,4 +1,5 @@
 import { EventEmitter } from "node:events";
+import { H264, H265, unit } from "./live-source-fixtures.js";
 import { SharedLiveSource, type SharedLiveSourceOptions } from "../shared-live-source.js";
 import type { LiveAudioFrame, LiveStreamHandle, LiveVideoFrame } from "../../../core/contracts.js";
 
@@ -116,6 +117,49 @@ describe("SharedLiveSource", () => {
       expect(got).toEqual([next, dependent]);
       expect(joined.awaitingKeyframe).toBe(false);
       source.dispose();
+    },
+  );
+
+  it.each([
+    { codec: "h264", subscription: "video" },
+    { codec: "h265", subscription: "video" },
+    { codec: "h264", subscription: "media" },
+    { codec: "h265", subscription: "media" },
+  ] as const)(
+    "waits for a subscribed $subscription consumer's live $codec keyframe",
+    async ({ codec, subscription }) => {
+      const { source, last } = mk();
+      const existing = source.attach();
+      const existingFrames: LiveVideoFrame[] = [];
+      existing.on("video", (value) => existingFrames.push(value));
+      const keyframe = { ...frame(true), codec, data: unit(codec === "h264" ? H264.idr : H265.idr) };
+      const dependent = { ...frame(false), codec, data: unit(codec === "h264" ? H264.delta : [0x02, 0x01, 0x11]) };
+      last().video(keyframe);
+      const joined = source.attach();
+      joined.on("audio", () => undefined);
+      last().video({ ...keyframe });
+      const got: LiveVideoFrame[] = [];
+      const configurations: unknown[] = [];
+      joined.on("video-config", (value) => configurations.push(value));
+      if (subscription === "video") joined.on("video", (value) => got.push(value));
+      else
+        joined.onMedia((item) => {
+          if (item.kind === "video") got.push(item.frame);
+        });
+      try {
+        await Promise.resolve();
+        last().video(dependent);
+        expect(got).toEqual([]);
+        const next = { ...keyframe };
+        last().video(next);
+        last().video(dependent);
+        expect(got).toEqual([next, dependent]);
+        expect(configurations).toEqual([{ codec, width: 960, height: 540 }]);
+        expect(existingFrames).toHaveLength(5);
+        expect(existingFrames.slice(-2)).toEqual([next, dependent]);
+      } finally {
+        source.dispose();
+      }
     },
   );
 
@@ -393,5 +437,9 @@ describe("SharedLiveSource ring buffer (V5)", () => {
     consumer.on("video", (item) => live.push(item));
     await Promise.resolve();
     expect(live).toHaveLength(0);
+    const next = frame(false, 0x42);
+    last().video(next);
+    expect(live).toEqual([next]);
+    source.dispose();
   });
 });

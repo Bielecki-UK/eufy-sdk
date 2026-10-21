@@ -738,7 +738,7 @@ export class P2PCommandRouter {
    * A {@link MediaProvider} bound to one serial — resolves the session then calls `p2p/media`.
    *
    * Every live egress here is a consumer of the SAME shared pull, so N `live()` calls collapse to one
-   * PPCS session and a live snapshot against a warm, keyframe-primed source costs no extra pull at all; a
+   * PPCS session and a live snapshot against a warm shared source costs no extra pull at all; a
    * cold source warms one and waits for a clean keyframe. Each shared egress passes its complete options
    * through because any of them may create the source, whose power and retention hints are fixed for
    * everyone who joins later. The bounded {@link MediaProvider.record} clip is the exception: it opens its

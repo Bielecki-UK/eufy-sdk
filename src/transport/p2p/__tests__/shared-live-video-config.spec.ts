@@ -11,8 +11,8 @@ import type { LiveVideoConfig, LiveVideoFrame } from "../../../core/contracts.js
  * previous frame's dimensions and diff every frame against them.
  *
  * The announcement is per CONSUMER rather than per source, because a consumer does not necessarily
- * receive the frame on which the source saw the change: it may join mid-session and be primed with a
- * cached keyframe, or cross its queue bound and resynchronise onto a later IDR. Both cases hand it media
+ * receive the frame on which the source saw the change: it may join mid-session or cross its queue
+ * bound and resynchronise onto a later IDR. Both cases hand it media
  * of a configuration it was never told about, so the comparison has to be against what THIS consumer was
  * last given.
  */
@@ -49,7 +49,7 @@ function watch(source: SharedLiveSource) {
 }
 
 /**
- * Let a staged keyframe-prime be replayed.
+ * Yield across asynchronous subscription setup.
  *
  * The prime is deferred to a microtask so it lands after the caller's `video` listener is in place, which
  * means a joining consumer is told its configuration on the turn after it attaches — never in the same

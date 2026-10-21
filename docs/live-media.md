@@ -25,7 +25,7 @@ Consequences a host should rely on:
 
 - **Cheap re-use.** The motion-thumbnail → tap-to-watch flow attaches a snapshot then a live view
   within seconds; the second attach re-uses the warm session, no second pull.
-- **Late joiners wait for a live keyframe.** Delivery starts at the next keyframe and continues
+- **Late joiners wait for a live keyframe.** After video subscription, delivery starts at the next keyframe and continues
   with its dependent pictures. A cached keyframe alone cannot supply the intervening references.
 - **Linger, then stop.** When the last consumer detaches the source lingers briefly (so a quick
   re-attach reuses it) and then stops the pull. You don't manage the pull; you manage your consumer.

@@ -29,7 +29,7 @@ function frame(): LiveVideoFrame {
 }
 
 describe("captureSnapshotFromShared (V6 snapshot as consumer)", () => {
-  it("rides a warm, primed source with NO second pull and cleans up its consumer", async () => {
+  it("rides a warm source with no second pull and cleans up its consumer", async () => {
     const streams: FakeStream[] = [];
     const source = new SharedLiveSource({
       makeStream: () => {
@@ -39,10 +39,10 @@ describe("captureSnapshotFromShared (V6 snapshot as consumer)", () => {
       },
     });
     const watcher = source.attach(); // an existing viewer warms the single pull
-    streams[0].video(frame()); // cache a keyframe (V2 prime)
+    streams[0].video(frame());
     expect(streams[0].started).toBe(1);
 
-    // Snapshot attaches as a consumer; the primed IDR decodes (ffmpeg fails in unit env → rejects),
+    // Snapshot attaches as a consumer; a live IDR decodes (ffmpeg fails in unit env → rejects),
     // but the point under test is transport behaviour: no extra pull, consumer released after.
     await expect(captureSnapshotFromShared(source, { timeoutMs: 1000 })).rejects.toBeInstanceOf(Error);
 

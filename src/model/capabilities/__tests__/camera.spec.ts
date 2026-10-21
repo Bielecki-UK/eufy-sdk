@@ -51,6 +51,7 @@ describe("camera capability module", () => {
       "soundDetectionType",
       "notificationStyle",
       "nightVision",
+      "nightVisionEnabled",
       "streamingQuality",
       "recordingQuality",
       "antiTheftDetection",
@@ -137,6 +138,41 @@ describe("camera capability module", () => {
       const type = buildCommand("soundDetectionType", 1, ctx(0)) as { data: Record<string, unknown> };
       expect(Object.keys(sens.data)).toEqual(["index"]);
       expect(Object.keys(type.data)).toEqual(["type"]);
+    });
+  });
+
+  describe("T8442 night vision", () => {
+    const t8442 = ctx(2, { model: "T8442", paramIds: new Set([2002]) });
+
+    it("reads cloud param 2002 as a boolean and updates both ways", () => {
+      const dev = Device.fromRecord("TEST-SN", { model: "T8442", params: { 2002: "0" } });
+      const spec = dev.properties.find((p) => p.name === "nightVisionEnabled");
+      expect(spec).toMatchObject({ paramType: 2002, type: "bool", writable: true });
+      expect(dev.getProperty("nightVisionEnabled")?.value).toBe(false);
+      dev.applyParams({ 2002: "1" });
+      expect(dev.getProperty("nightVisionEnabled")?.value).toBe(true);
+    });
+
+    it("writes direct IRCUT_SWITCH 1013 as int-string on the device channel", () => {
+      expect(buildCommand("nightVisionEnabled", true, t8442)).toEqual({
+        kind: "set-param",
+        param: 1013,
+        value: 1,
+        form: "int-string",
+        channel: 2,
+      });
+      expect(buildCommand("nightVisionEnabled", false, t8442)).toMatchObject({ value: 0 });
+    });
+
+    it("does not offer the T8442 control to another model or the 1277 control to T8442", () => {
+      expect(
+        buildCommand("nightVisionEnabled", true, ctx(2, { model: "T8425", paramIds: new Set([2002]) })),
+      ).toBeUndefined();
+      expect(buildCommand("nightVision", 1, t8442)).toBeUndefined();
+      expect(buildCommand("nightVision", 1, ctx(3, { model: "T8425" }))).toMatchObject({
+        kind: "set-payload",
+        cmd: CAMERA_CMD.NIGHT_VISION_TYPE,
+      });
     });
   });
 

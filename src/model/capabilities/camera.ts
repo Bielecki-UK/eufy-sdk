@@ -728,7 +728,7 @@ export const CAMERA_MEMBERS = {
     kind: "enum",
     enumValues: { 0: "Off", 1: "Infrared", 2: "Full Color" },
     provenance: "verified",
-    available: isCameraCodec,
+    available: (ctx: AvailabilityContext) => isCameraCodec(ctx) && ctx.model !== "T8442",
     description:
       "Night-vision mode (NIGHT_VISION_TYPE 1277): 0 = off, 1 = infrared (B&W), 2 = full colour. " +
       "✅ wire verified live (T8425 ch3): 1350 SET_PAYLOAD, mChannel 0, {channel:N, night_sion:mode}. " +
@@ -739,6 +739,21 @@ export const CAMERA_MEMBERS = {
         ? undefined
         : setPayload(CAMERA_CMD.NIGHT_VISION_TYPE, { channel: ctx.channel, night_sion: nv }, ctx, 0, 0, "auto");
     },
+  },
+  /**
+   * T8442 reports night-vision enable on cloud param 2002 (0=off, 1=on) rather than 1277.
+   * Both values and the direct IRCUT_SWITCH (1013) int-string writes were verified on hardware.
+   * Restrict this boolean to T8442; other camera families retain their existing night-vision mode.
+   */
+  nightVisionEnabled: {
+    param: 2002,
+    type: "bool",
+    kind: "boolean",
+    available: (ctx: AvailabilityContext) => isCameraCodec(ctx) && ctx.model === "T8442",
+    requiresRead: true,
+    provenance: "verified",
+    description: "T8442 night-vision enable (reported on 2002; direct IRCUT_SWITCH 1013 writes).",
+    write: (v, ctx) => setScalar(1013, asBool(v) ? 1 : 0, ctx, "int-string"),
   },
   /**
    * Live-view quality, the pair to {@link CAMERA_MEMBERS.recordingQuality} and a different setting on a

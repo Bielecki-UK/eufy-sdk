@@ -70,6 +70,7 @@ describe("independent NVR media lifetime", () => {
     const consumer = await media.nvrMediaProviderFor(route).live();
     const sound = vi.fn();
     consumer.on("audio", sound);
+    sessions[0]!.emit("mediaData", video());
     sessions[0]!.emit("mediaData", audio(0));
     sessions[0]!.emit("mediaData", audio(2));
     sessions[0]!.emit("mediaData", audio(7));

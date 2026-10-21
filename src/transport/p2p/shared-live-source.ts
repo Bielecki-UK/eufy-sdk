@@ -191,7 +191,6 @@ class ConsumerImpl extends EventEmitter implements Consumer {
     waitForKeyframe: boolean,
   ) {
     super();
-    this.awaitingKeyframe = waitForKeyframe;
     if (waitForKeyframe) {
       this.on("newListener", (event) => {
         if (event !== "video" && event !== "media") return;

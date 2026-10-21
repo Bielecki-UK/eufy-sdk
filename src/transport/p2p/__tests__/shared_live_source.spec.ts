@@ -58,6 +58,20 @@ describe("SharedLiveSource", () => {
     expect(source.consumerCount).toBe(2);
   });
 
+  it("delivers audio to an audio-only subscriber before the first video keyframe", () => {
+    const { source, last } = mk();
+    try {
+      const consumer = source.attach();
+      const received = vi.fn();
+      consumer.on("audio", received);
+      const sound: LiveAudioFrame = { codec: "aac-lc", data: Buffer.from([1, 2]) };
+      last().audio(sound);
+      expect(received).toHaveBeenCalledExactlyOnceWith(sound);
+    } finally {
+      source.dispose();
+    }
+  });
+
   it("delivers the source-captured arrival time with live media", () => {
     const { source, last } = mk();
     const consumer = source.attach();

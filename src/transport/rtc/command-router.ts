@@ -1,8 +1,8 @@
 /**
  * RTC command router: drives a station over the portal's WebRTC data channel instead of P2P.
  *
- * The T9000 answers no P2P lookup, but it accepts the portal's control channel: sign â†’ WS join â†’ scall â†’
- * SDP answer â†’ ICE over the relay the hub grants â†’ DTLS â†’ SCTP data channels, with commands riding
+ * The T9000 answers no P2P lookup, but it accepts the portal's control channel: sign → WS join → scall →
+ * SDP answer → ICE over the relay the hub grants → DTLS → SCTP data channels, with commands riding
  * `WebrtcDataChannel` as portal packets (see {@link buildPortalPacket}).
  *
  * `set-payload` rides the `1350` SET_PAYLOAD envelope, inner `{account_id, cmd, mValue3, payload}`;

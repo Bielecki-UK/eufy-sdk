@@ -796,6 +796,11 @@ export interface AbortableCall {
   signal?: AbortSignal;
 }
 
+/** Select an optical view; absence selects view 0. */
+export interface MediaSourceSelection {
+  view?: number;
+}
+
 export interface SharedSourceHints {
   /**
    * Power source, a runtime device fact (`"battery"` incl. solar, or `"wired"`) — never a device-family
@@ -822,6 +827,8 @@ export interface SharedSourceHints {
  * because an unbound model has no live client (hence `?.` at the call site).
  */
 export interface MediaProvider {
+  /** Optical view identifiers supported by this bound media route. */
+  views?: readonly number[];
   /**
    * Return the latest validated push thumbnail retained in memory. This passive operation performs no
    * network, storage, P2P, live-media, or transcoding work at call time. It rejects with
@@ -850,7 +857,8 @@ export interface MediaProvider {
       collectMs?: number;
       skipKeyframes?: number;
     } & SharedSourceHints &
-      AbortableCall,
+      AbortableCall &
+      MediaSourceSelection,
   ): Promise<{
     jpeg: Buffer;
     width: number;
@@ -883,7 +891,9 @@ export interface MediaProvider {
    * stream?.stop(); // detach this consumer
    * ```
    */
-  live(opts?: SharedSourceHints & AbortableCall & Record<string, unknown>): Promise<LiveStreamConsumer>;
+  live(
+    opts?: SharedSourceHints & AbortableCall & MediaSourceSelection & Record<string, unknown>,
+  ): Promise<LiveStreamConsumer>;
   /**
    * Record `seconds` of video → an mp4/h264 buffer.
    *
@@ -904,7 +914,7 @@ export interface MediaProvider {
    * lifetime, and destroying it releases the shared pull.
    */
   openReadable?(
-    opts?: { objectMode?: boolean; arrivalTime?: boolean } & SharedSourceHints & AbortableCall,
+    opts?: { objectMode?: boolean; arrivalTime?: boolean } & SharedSourceHints & AbortableCall & MediaSourceSelection,
   ): Promise<import("node:stream").Readable>;
   /**
    * Continuously record the live feed as fragmented-MP4 (CMAF). The caller-owned

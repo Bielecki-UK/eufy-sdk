@@ -67,7 +67,7 @@ function router() {
 describe("independent NVR media lifetime", () => {
   it("delivers both observed audio codecs and refuses truncated or unknown audio", async () => {
     const { media, sessions } = router();
-    const consumer = await media.nvrMediaProviderFor(route).live();
+    const consumer = await media.nvrMediaProviderFor(route, [0]).live();
     const sound = vi.fn();
     consumer.on("audio", sound);
     sessions[0]!.emit("mediaData", audio(0));
@@ -80,10 +80,10 @@ describe("independent NVR media lifetime", () => {
   it("shares one camera while keeping another camera independent", async () => {
     vi.useFakeTimers();
     const { media, sessions } = router();
-    const primary = media.nvrMediaProviderFor(route);
+    const primary = media.nvrMediaProviderFor(route, [0]);
     const a = await primary.live();
     const shared = await primary.live();
-    const other = await media.nvrMediaProviderFor({ ...route, cameraSn: "T8000P0000000002", channel: 4 }).live();
+    const other = await media.nvrMediaProviderFor({ ...route, cameraSn: "T8000P0000000002", channel: 4 }, [0]).live();
     expect(sessions).toHaveLength(2);
     const requests = sessions.map((s) => JSON.parse(s.sendCommand.mock.calls[0]![0].subarray(16).toString()));
     expect(requests.map((r) => r.cmd)).toEqual([1003, 1003]);
@@ -112,13 +112,13 @@ describe("independent NVR media lifetime", () => {
   });
   it("rejects an already-aborted call before opening a session", async () => {
     const { media, sessions } = router();
-    const single = media.nvrMediaProviderFor(route);
+    const single = media.nvrMediaProviderFor(route, [0]);
     await expect(single.live({ signal: AbortSignal.abort() })).rejects.toThrow();
     expect(sessions).toHaveLength(0);
   });
   it("propagates a rejected start, closes that session and permits a fresh attempt", async () => {
     const { media, sessions } = router();
-    const camera = media.nvrMediaProviderFor(route);
+    const camera = media.nvrMediaProviderFor(route, [0]);
     const first = await camera.live();
     const error = vi.fn();
     first.on("error", error);

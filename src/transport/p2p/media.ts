@@ -40,8 +40,8 @@ export async function openLiveStream(session: P2PSession, opts: LiveStreamOption
 /**
  * **Live snapshot off a SHARED source** (V6) — snapshot as just another consumer of the shared live
  * pull. A warm source reuses its upstream session; collection starts from live keyframes rather than
- * a retained picture. The first keyframe is skipped by default because the first IDR after a cold
- * start is frequently partial. Requires `ffmpeg` for the Annex-B → JPEG decode.
+ * a retained picture. A live source captures its next keyframe by default; a cold source skips the
+ * first keyframe because its first IDR is frequently partial. Requires `ffmpeg` for the Annex-B → JPEG decode.
  *
  * The returned dimensions are the ENCODED IMAGE's own, read back out of it — never the frame header's.
  * The header states the stream's geometry when the capture started, and a stream that reconfigures
@@ -72,7 +72,7 @@ export async function captureSnapshotFromShared(
 ): Promise<{ jpeg: Buffer; width: number; height: number }> {
   const timeoutMs = opts.timeoutMs ?? 20000;
   const collectMs = opts.collectMs ?? 1500;
-  const skip = opts.skipKeyframes ?? 1;
+  const skip = opts.skipKeyframes ?? (source.state === "live" ? 0 : 1);
   opts.signal?.throwIfAborted();
   const consumer = source.attach();
   let burst: { h264: Buffer; codec: VideoCodec; sets?: ParamSets };

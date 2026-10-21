@@ -54,15 +54,12 @@ describe("captureSnapshotFromShared — decoder priming", () => {
     outcome = { stdout: JPEG };
   });
 
-  it("uses fresh keyframes and the default skip and collection window on a warm source", async () => {
+  it("captures the first live keyframe on a warm source with the default collection window", async () => {
     vi.useFakeTimers();
     const { source, stream } = warmSource();
     stream.video(frame(unit(SPS, PPS, IDR)));
     const capture = captureSnapshotFromShared(source);
     try {
-      await vi.advanceTimersByTimeAsync(1500);
-      expect(ffmpeg.runs).toHaveLength(0);
-      stream.video(frame(unit(IDR)));
       await vi.advanceTimersByTimeAsync(1500);
       expect(ffmpeg.runs).toHaveLength(0);
       stream.video(frame(unit(IDR)));

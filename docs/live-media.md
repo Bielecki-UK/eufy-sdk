@@ -25,8 +25,9 @@ Consequences a host should rely on:
 
 - **Cheap re-use.** The motion-thumbnail → tap-to-watch flow attaches a snapshot then a live view
   within seconds; the second attach re-uses the warm session, no second pull.
-- **Late joiners wait for a live keyframe.** After video subscription, delivery starts at the next keyframe and continues
-  with its dependent pictures. A cached keyframe alone cannot supply the intervening references.
+- **Late joiners wait for a live keyframe.** After video subscription, delivery starts at the next
+  keyframe and continues with its dependent pictures. A cached keyframe alone cannot supply the
+  intervening references.
 - **Linger, then stop.** When the last consumer detaches the source lingers briefly (so a quick
   re-attach reuses it) and then stops the pull. You don't manage the pull; you manage your consumer.
 
@@ -151,8 +152,8 @@ first announcements of a session can move from the header's answer to the parame
 having reconfigured; a caller that rebuilds on a difference rebuilds once there.
 
 The announcement is per consumer, against what **that** consumer was last given. A consumer joining
-mid-session starts at its next live keyframe, and one that crosses its queue
-bound resynchronises onto a later IDR having skipped the frame the change arrived on — so both are told,
+mid-session starts at its next live keyframe, and one that crosses its queue bound resynchronises onto
+a later IDR having skipped the frame the change arrived on — so both are told,
 even though the shared source saw the change once.
 
 A change arriving on a keyframe carrying fresh parameter sets is what every run but one showed, and that

@@ -1276,7 +1276,7 @@ export class P2PSession extends EventEmitter {
    * `cipher_id` 0.
    */
   private sendsInTheClear(): boolean {
-    return this.gatewayCipherId === 0;
+    return this.gatewayCipherId === 0 || this.gatewayCipherId === 65433;
   }
 
   /**

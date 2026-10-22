@@ -182,10 +182,18 @@ describe("camera capability module", () => {
       });
     });
 
-    it("the bound T8442 setter sends the same 1013 command", async () => {
+    it("the bound T8442 setter sends the literal 1013 int-string command", async () => {
       const { acts, sent } = camera(t8442);
       await acts.setNightVision!(NightVision.Infrared);
-      expect(sent).toEqual([buildCommand("nightVision", NightVision.Infrared, t8442)]);
+      expect(sent).toEqual([
+        {
+          kind: "set-param",
+          param: CAMERA_CMD.IC_NIGHT_VISION_TYPE,
+          value: 1,
+          form: "int-string",
+          channel: 2,
+        },
+      ]);
     });
 
     it("rejects Full Color on T8442 with a model-specific error", async () => {

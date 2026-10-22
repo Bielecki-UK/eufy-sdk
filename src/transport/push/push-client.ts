@@ -119,10 +119,8 @@ export class PushClient extends EventEmitter {
   /** Consecutive MCS login rejections — transient ones self-heal via reconnect (see {@link onMessage}). */
   private loginFailures = 0;
   /**
-   * How many of {@link persistentIds} the last `LoginRequest` reported. A successful `LoginResponse`
-   * acknowledges them, so the server does not redeliver those messages and they are dropped then, as
-   * Chromium's MCS client does; ids that arrive after the request stay until the next login reports
-   * them.
+   * How many of {@link persistentIds} the last `LoginRequest` reported; a successful `LoginResponse`
+   * acknowledges them, so they are dropped then.
    */
   private reportedIds = 0;
 

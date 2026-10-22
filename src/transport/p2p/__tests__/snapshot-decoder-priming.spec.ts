@@ -54,27 +54,32 @@ describe("captureSnapshotFromShared — decoder priming", () => {
     outcome = { stdout: JPEG };
   });
 
-  it("captures the first live keyframe on a warm source with the default collection window", async () => {
-    vi.useFakeTimers();
-    const { source, stream } = warmSource();
-    stream.video(frame(unit(SPS, PPS, IDR)));
-    const capture = captureSnapshotFromShared(source);
-    try {
-      await vi.advanceTimersByTimeAsync(1500);
-      expect(ffmpeg.runs).toHaveLength(0);
-      stream.video(frame(unit(IDR)));
-      stream.video(frame(unit(H264.delta), { keyframe: false }));
-      await vi.advanceTimersByTimeAsync(1499);
-      expect(ffmpeg.runs).toHaveLength(0);
-      await vi.advanceTimersByTimeAsync(1);
-      expect((await capture).jpeg).toEqual(JPEG);
-      expect(ffmpeg.runs).toHaveLength(1);
-      expect(nalTypes(decodedAt(0))).toEqual([0x67, 0x68, 0x65, 0x41]);
-    } finally {
-      source.dispose();
-      vi.useRealTimers();
-    }
-  });
+  it.each([false, true])(
+    "captures the first live keyframe with the default window (watcher detached: %s)",
+    async (detached) => {
+      vi.useFakeTimers();
+      const { source, stream, watcher } = warmSource();
+      stream.video(frame(unit(SPS, PPS, IDR)));
+      if (detached) watcher.detach();
+      expect(source.state).toBe(detached ? "lingering" : "live");
+      const capture = captureSnapshotFromShared(source);
+      try {
+        await vi.advanceTimersByTimeAsync(1500);
+        expect(ffmpeg.runs).toHaveLength(0);
+        stream.video(frame(unit(IDR)));
+        stream.video(frame(unit(H264.delta), { keyframe: false }));
+        await vi.advanceTimersByTimeAsync(1499);
+        expect(ffmpeg.runs).toHaveLength(0);
+        await vi.advanceTimersByTimeAsync(1);
+        expect((await capture).jpeg).toEqual(JPEG);
+        expect(ffmpeg.runs).toHaveLength(1);
+        expect(nalTypes(decodedAt(0))).toEqual([0x67, 0x68, 0x65, 0x41]);
+      } finally {
+        source.dispose();
+        vi.useRealTimers();
+      }
+    },
+  );
 
   it("primes a burst whose parameter sets were announced before it with those sets", async () => {
     const { source, stream, watcher } = warmSource();

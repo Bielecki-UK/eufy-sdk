@@ -72,9 +72,9 @@ export async function captureSnapshotFromShared(
 ): Promise<{ jpeg: Buffer; width: number; height: number }> {
   const timeoutMs = opts.timeoutMs ?? 20000;
   const collectMs = opts.collectMs ?? 1500;
-  const skip = opts.skipKeyframes ?? (source.state === "live" ? 0 : 1);
   opts.signal?.throwIfAborted();
   const consumer = source.attach();
+  const skip = opts.skipKeyframes ?? (source.state === "live" ? 0 : 1);
   let burst: { h264: Buffer; codec: VideoCodec; sets?: ParamSets };
   try {
     burst = await new Promise<{

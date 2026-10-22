@@ -414,6 +414,11 @@ function isT8410HomeBase3(ctx: AvailabilityContext): boolean {
   return ctx.model === "T8410" && ctx.stationSerial?.startsWith("T8030") === true;
 }
 
+/** T8442 has a binary night-vision wire, unlike cameras with the three-mode 1277 control. */
+function isT8442(ctx: AvailabilityContext): boolean {
+  return ctx.model === "T8442";
+}
+
 /** T8410 on HomeBase 3 firmware >= 2.3.1.0 uses the wrapped disable-bit power switch. */
 function usesHomeBasePowerPayload(ctx: CommandContext): boolean {
   if (!isT8410HomeBase3(ctx) || !ctx.firmwareVersion || !/^\d+(?:\.\d+){2,3}$/.test(ctx.firmwareVersion)) return false;
@@ -729,11 +734,11 @@ export const CAMERA_MEMBERS = {
     type: "enum",
     kind: "enum",
     enumValues: { 0: "Off", 1: "Infrared", 2: "Full Color" },
-    enumValuesFor: (ctx: AvailabilityContext) => (ctx.model === "T8442" ? { 0: "Off", 1: "Infrared" } : undefined),
+    enumValuesFor: (ctx) => (isT8442(ctx) ? { 0: "Off", 1: "Infrared" } : undefined),
     provenance: "verified",
     available: isCameraCodec,
-    readAvailable: (ctx: AvailabilityContext) => ctx.model !== "T8442",
-    readAliases: [{ paramType: 2002, available: (ctx: AvailabilityContext) => ctx.model === "T8442" }],
+    readAvailable: (ctx) => !isT8442(ctx),
+    readAliases: [{ paramType: 2002, available: isT8442 }],
     description:
       "Night-vision mode: 0 = off, 1 = infrared (B&W), 2 = full colour where supported. " +
       "T8425 uses NIGHT_VISION_TYPE 1277 (1350 SET_PAYLOAD, night_sion); T8442 reports 2002 " +
@@ -741,10 +746,10 @@ export const CAMERA_MEMBERS = {
     write: (v, ctx) => {
       const nv = coerceEnumValue(NightVision, v);
       if (nv == null) return undefined;
-      if (ctx.model === "T8442") {
-        return nv === NightVision.FullColor
-          ? undefined
-          : setScalar(CAMERA_CMD.IC_NIGHT_VISION_TYPE, nv, ctx, "int-string");
+      if (isT8442(ctx)) {
+        if (nv === NightVision.FullColor)
+          throw new Error("nightVision: Full Color is not supported on T8442 (only Off/Infrared)");
+        return setScalar(CAMERA_CMD.IC_NIGHT_VISION_TYPE, nv, ctx, "int-string");
       }
       return setPayload(CAMERA_CMD.NIGHT_VISION_TYPE, { channel: ctx.channel, night_sion: nv }, ctx, 0, 0, "auto");
     },

@@ -188,8 +188,10 @@ describe("camera capability module", () => {
       expect(sent).toEqual([buildCommand("nightVision", NightVision.Infrared, t8442)]);
     });
 
-    it("rejects Full Color on T8442 rather than dispatching an unsupported command", () => {
-      expect(() => buildCommand("nightVision", NightVision.FullColor, t8442)).toThrow(/not a valid value/);
+    it("rejects Full Color on T8442 with a model-specific error", async () => {
+      const message = /nightVision: Full Color is not supported on T8442 \(only Off\/Infrared\)/;
+      expect(() => buildCommand("nightVision", NightVision.FullColor, t8442)).toThrow(message);
+      await expect(camera(t8442).acts.setNightVision!(NightVision.FullColor)).rejects.toThrow(message);
     });
 
     it("keeps the 1277 property and 1350 payload for T8425", () => {

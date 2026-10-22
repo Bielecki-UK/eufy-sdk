@@ -118,6 +118,13 @@ export class PushClient extends EventEmitter {
   private closing = false;
   /** Consecutive MCS login rejections — transient ones self-heal via reconnect (see {@link onMessage}). */
   private loginFailures = 0;
+  /**
+   * How many of {@link persistentIds} the last `LoginRequest` reported. A successful `LoginResponse`
+   * acknowledges them, so the server does not redeliver those messages and they are dropped then, as
+   * Chromium's MCS client does; ids that arrive after the request stay until the next login reports
+   * them.
+   */
+  private reportedIds = 0;
 
   constructor(
     private readonly creds: FcmCredentials,
@@ -181,6 +188,7 @@ export class PushClient extends EventEmitter {
       clientEvent: [],
       receivedPersistentId: this.persistentIds,
     };
+    this.reportedIds = this.persistentIds.length;
     const buf = LoginRequest.encodeDelimited(obj).finish();
     return Buffer.concat([Buffer.from([MCS_VERSION, MessageTag.LoginRequest]), buf]);
   }
@@ -207,6 +215,8 @@ export class PushClient extends EventEmitter {
           this.loggedIn = true;
           this.currentDelay = 0;
           this.loginFailures = 0;
+          this.persistentIds = this.persistentIds.slice(this.reportedIds);
+          this.reportedIds = 0;
           this.startHeartbeat();
           this.logger.debug("[push] logged in");
           this.emit("connect");

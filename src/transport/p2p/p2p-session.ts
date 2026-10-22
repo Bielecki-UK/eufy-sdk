@@ -509,7 +509,11 @@ export class P2PSession extends EventEmitter {
    * last sent (`"l2"` GCM / `"l1"` ECB). A keepalive tick re-issues the start if the variant should
    * change (the level-2 key arrived after an initial level-1 start), otherwise sends the 1139 nudge.
    */
-  private readonly liveStartedChannels = new Map<number, "l1" | "l2">();
+  private readonly liveStartedChannels = new Map<number, "l1" | "l2" | "clear">();
+  /** The `cipher_id` this connection's `CMD_GATEWAYINFO` reply named, once its negotiation has read it. */
+  private gatewayCipherId?: number;
+  /** The `n` of the last `[0x01, n]` header this connection sent in the clear — see {@link nextClearCommandBytes}. */
+  private clearCommandCount = 0;
   private readonly unackedLiveStarts = new Map<number, RetainedDatagram & { channel: number }>();
   private liveStartRetransmitTimer?: ReturnType<typeof setInterval>;
 
@@ -715,6 +719,7 @@ export class P2PSession extends EventEmitter {
     this.level2Negotiating = true;
     const generation = this.connectionGeneration;
     const cipherId = gatewayInfoCipherId(gwPayload);
+    this.gatewayCipherId = cipherId;
     this.trace({ phase: "level2-negotiating", cipherId });
     void (async () => {
       try {
@@ -829,6 +834,8 @@ export class P2PSession extends EventEmitter {
       this.level2Pending = this.cfg.resolveCipherKey !== undefined;
       this.level2Negotiating = false;
       this.level2Reprompted = false;
+      this.gatewayCipherId = undefined;
+      this.clearCommandCount = 0;
     }
 
     const socket = dgram.createSocket("udp4");
@@ -1145,7 +1152,7 @@ export class P2PSession extends EventEmitter {
       this.sendMediaPayloadLevel2(CMD_START_REALTIME_MEDIA, channel, accountId, {});
       return;
     }
-    const want: "l1" | "l2" = this.level2Key ? "l2" : "l1";
+    const want = this.level2Key ? "l2" : this.sendsInTheClear() ? "clear" : "l1";
     if (opts?.force) {
       for (const pending of this.unackedLiveStarts.values()) if (pending.channel === channel) return;
       this.liveStartedChannels.delete(channel);
@@ -1174,8 +1181,20 @@ export class P2PSession extends EventEmitter {
    * `video_type` is 12, and `transaction` is the millisecond timestamp as a string. The device answers a
    * start carrying these values with a keyframe; `encryptkey` is the modulus it RSA-wraps each keyframe's
    * AES media key with (unwrapped by {@link decodeVideoFrame}).
+   *
+   * With `clearMsgId`, the body of a start sent in the clear: `{accountId, encryptkey, msg_id, streamtype: 1}`
+   * only, `msg_id` being `clearMsgId`, which changes from one start to the next.
    */
-  private startLiveJson(channel: number, accountId: string): Buffer {
+  private startLiveJson(channel: number, accountId: string, clearMsgId?: number): Buffer {
+    if (clearMsgId !== undefined) {
+      return Buffer.from(
+        JSON.stringify({
+          commandType: CMD_START_LIVE,
+          data: { accountId, encryptkey: this.rsaModulus(), msg_id: clearMsgId, streamtype: 1 },
+        }),
+        "utf-8",
+      );
+    }
     const now = Date.now();
     return Buffer.from(
       JSON.stringify({
@@ -1210,23 +1229,29 @@ export class P2PSession extends EventEmitter {
    * (GCM, signCode 8, frame type 10) when the session has a negotiated key, else level-1 (AES-128-ECB,
    * signCode 1, frame type 11) — chosen by the session key, not the device family. The camera RSA-wraps
    * each keyframe's AES media key with the `encryptkey` modulus (unwrapped by {@link decodeVideoFrame}).
+   * A session that {@link sendsInTheClear} sends it unencrypted instead: signCode 0, frame type 0, header
+   * bytes `[0x01, n]` from {@link nextClearCommandBytes}, and `n` as the body's `msg_id`.
    */
   private sendStartLiveOwnSession(channel: number, accountId: string): void {
     if (!this.connectAddress) return;
-    const plain = this.startLiveJson(channel, accountId);
     let payload: Buffer;
     let signCode: number;
     let magic: [number, number];
     let frameType: number;
     if (this.level2Key) {
-      const enc = this.encryptLevel2(plain);
+      const enc = this.encryptLevel2(this.startLiveJson(channel, accountId));
       if (!enc) return;
       payload = enc;
       signCode = 8;
       magic = [0x08, 0x00];
       frameType = START_LIVE_FRAME_TYPE_L2;
+    } else if (this.sendsInTheClear()) {
+      magic = this.nextClearCommandBytes();
+      payload = this.startLiveJson(channel, accountId, magic[1]);
+      signCode = 0;
+      frameType = 0;
     } else {
-      payload = encryptP2PData(paddingP2PData(plain), this.level1Key);
+      payload = encryptP2PData(paddingP2PData(this.startLiveJson(channel, accountId)), this.level1Key);
       signCode = 1;
       magic = [0x01, 0x00];
       frameType = START_LIVE_FRAME_TYPE_L1;
@@ -1244,6 +1269,23 @@ export class P2PSession extends EventEmitter {
     this.unackedLiveStarts.set(sequence, { channel, data, firstSentAt: sentAt, sentAt, sends: 1 });
     this.armLiveStartRetransmit();
     this.send(this.connectAddress, RequestMessageType.DATA, data);
+  }
+
+  /**
+   * Whether this session's own-session start and stop go in the clear: its `CMD_GATEWAYINFO` reply named
+   * `cipher_id` 0.
+   */
+  private sendsInTheClear(): boolean {
+    return this.gatewayCipherId === 0;
+  }
+
+  /**
+   * Header bytes 10-11 of this connection's next command sent in the clear: `[0x01, n]`, with `n` counting
+   * those commands from 1 and never 0. A retransmit repeats its `n`, and the device's reply echoes it.
+   */
+  private nextClearCommandBytes(): [number, number] {
+    this.clearCommandCount = (this.clearCommandCount % 0xff) + 1;
+    return [0x01, this.clearCommandCount];
   }
 
   /**
@@ -1424,6 +1466,8 @@ export class P2PSession extends EventEmitter {
    *    `uint32`, the same 4-byte body as the attached talkback frames. The app sends this frame on closing
    *    an own-session camera's live view; the camera stops streaming on it within a second, and keeps
    *    streaming through the 1350-wrapped form.
+   *  - own-session on a session that {@link sendsInTheClear}: the same 4-byte body unencrypted, signCode 0,
+   *    header bytes from {@link nextClearCommandBytes}.
    *  - without a level-2 key: the bare 1004 command.
    */
   stopLiveMedia(channel: number = STATION_CHANNEL, accountId = "", homeBaseAttached = false): void {
@@ -1435,12 +1479,19 @@ export class P2PSession extends EventEmitter {
       clearInterval(this.liveStartRetransmitTimer);
       this.liveStartRetransmitTimer = undefined;
     }
+    const body = Buffer.allocUnsafe(4);
+    body.writeUInt32LE(channel >>> 0, 0);
     if (this.level2Key && !homeBaseAttached) {
-      const body = Buffer.allocUnsafe(4);
-      body.writeUInt32LE(channel >>> 0, 0);
       this.sendRawLevel2Bytes(body, channel, CMD_STOP_REALTIME_MEDIA, 8);
     } else if (this.level2Key) {
       this.sendMediaPayloadLevel2(CMD_STOP_REALTIME_MEDIA, channel, accountId, {});
+    } else if (!homeBaseAttached && this.sendsInTheClear() && this.connectAddress) {
+      const data = Buffer.concat([
+        buildCommandHeader(this.seqNumber, CMD_STOP_REALTIME_MEDIA),
+        buildRawCommandPayload(body, channel, 0, this.nextClearCommandBytes(), 0),
+      ]);
+      this.seqNumber = (this.seqNumber + 1) & 0xffff;
+      this.send(this.connectAddress, RequestMessageType.DATA, data);
     } else {
       this.sendCommand(CMD_STOP_REALTIME_MEDIA, channel);
     }

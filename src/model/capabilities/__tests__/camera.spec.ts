@@ -51,7 +51,6 @@ describe("camera capability module", () => {
       "soundDetectionType",
       "notificationStyle",
       "nightVision",
-      "nightVisionEnabled",
       "streamingQuality",
       "recordingQuality",
       "antiTheftDetection",
@@ -141,37 +140,71 @@ describe("camera capability module", () => {
     });
   });
 
-  describe("T8442 night vision", () => {
+  describe("T8442 night vision (read alias + direct wire)", () => {
     const t8442 = ctx(2, { model: "T8442", paramIds: new Set([2002]) });
 
-    it("reads cloud param 2002 as a boolean and updates both ways", () => {
+    it("keeps one nightVision property, reads 2002 as Off/Infrared and updates both ways", () => {
       const dev = Device.fromRecord("TEST-SN", { model: "T8442", params: { 2002: "0" } });
-      const spec = dev.properties.find((p) => p.name === "nightVisionEnabled");
-      expect(spec).toMatchObject({ paramType: 2002, type: "bool", writable: true });
-      expect(dev.getProperty("nightVisionEnabled")?.value).toBe(false);
+      const spec = dev.properties.find((p) => p.name === "nightVision");
+      expect(spec).toMatchObject({
+        paramType: 2002,
+        type: "enum",
+        kind: "enum",
+        writable: true,
+        enumValues: { 0: "Off", 1: "Infrared" },
+      });
+      expect(dev.properties.some((p) => p.name === "nightVisionEnabled")).toBe(false);
+      expect(dev.getProperty("nightVision")?.value).toBe(NightVision.Off);
       dev.applyParams({ 2002: "1" });
-      expect(dev.getProperty("nightVisionEnabled")?.value).toBe(true);
+      expect(dev.getProperty("nightVision")?.value).toBe(NightVision.Infrared);
+      dev.applyParams({ 2002: "0" });
+      expect(dev.getProperty("nightVision")?.value).toBe(NightVision.Off);
+      // Even if 1277 appears, the model-specific 2002 alias remains the source of truth.
+      const both = Device.fromRecord("TEST-SN", { model: "T8442", params: { 1277: "2", 2002: "1" } });
+      expect(both.properties.find((p) => p.name === "nightVision")?.paramType).toBe(2002);
+      expect(both.getProperty("nightVision")?.value).toBe(NightVision.Infrared);
     });
 
-    it("writes direct IRCUT_SWITCH 1013 as int-string on the device channel", () => {
-      expect(buildCommand("nightVisionEnabled", true, t8442)).toEqual({
+    it("writes 1013 as level-1 int-string for T8442, on and off", () => {
+      expect(buildCommand("nightVision", NightVision.Infrared, t8442)).toEqual({
         kind: "set-param",
-        param: 1013,
+        param: CAMERA_CMD.IC_NIGHT_VISION_TYPE,
         value: 1,
         form: "int-string",
         channel: 2,
       });
-      expect(buildCommand("nightVisionEnabled", false, t8442)).toMatchObject({ value: 0 });
+      expect(buildCommand("nightVision", NightVision.Off, t8442)).toEqual({
+        kind: "set-param",
+        param: CAMERA_CMD.IC_NIGHT_VISION_TYPE,
+        value: 0,
+        form: "int-string",
+        channel: 2,
+      });
     });
 
-    it("does not offer the T8442 control to another model or the 1277 control to T8442", () => {
-      expect(
-        buildCommand("nightVisionEnabled", true, ctx(2, { model: "T8425", paramIds: new Set([2002]) })),
-      ).toBeUndefined();
-      expect(buildCommand("nightVision", 1, t8442)).toBeUndefined();
-      expect(buildCommand("nightVision", 1, ctx(3, { model: "T8425" }))).toMatchObject({
+    it("the bound T8442 setter sends the same 1013 command", async () => {
+      const { acts, sent } = camera(t8442);
+      await acts.setNightVision!(NightVision.Infrared);
+      expect(sent).toEqual([buildCommand("nightVision", NightVision.Infrared, t8442)]);
+    });
+
+    it("rejects Full Color on T8442 rather than dispatching an unsupported command", () => {
+      expect(() => buildCommand("nightVision", NightVision.FullColor, t8442)).toThrow(/not a valid value/);
+    });
+
+    it("keeps the 1277 property and 1350 payload for T8425", () => {
+      const older = ctx(3, { model: "T8425", paramIds: new Set([CAMERA_CMD.NIGHT_VISION_TYPE]) });
+      const dev = Device.fromRecord("TEST-SN", { model: "T8425", params: { 1277: "2" } });
+      expect(dev.properties.find((p) => p.name === "nightVision")).toMatchObject({
+        paramType: CAMERA_CMD.NIGHT_VISION_TYPE,
+        enumValues: { 0: "Off", 1: "Infrared", 2: "Full Color" },
+      });
+      expect(dev.getProperty("nightVision")?.value).toBe(NightVision.FullColor);
+      expect(buildCommand("nightVision", NightVision.FullColor, older)).toMatchObject({
         kind: "set-payload",
         cmd: CAMERA_CMD.NIGHT_VISION_TYPE,
+        channel: 0,
+        payload: { channel: 3, night_sion: 2 },
       });
     });
   });

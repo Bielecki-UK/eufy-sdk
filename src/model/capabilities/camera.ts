@@ -60,6 +60,8 @@ export const CAMERA_CMD = {
    * (1013). (Some models omit full colour; enum in {@link NightVision}.)
    */
   NIGHT_VISION_TYPE: 1277,
+  /** T8442 infrared night vision on/off: direct L1 int-string, hardware verified (0/1). */
+  IC_NIGHT_VISION_TYPE: 1013,
   /**
    * Push-notification STYLE — how much a detection push carries: text alone, a thumbnail, or text
    * followed by a thumbnail. App `CMD_INDOOR_PUSH_NOTIFY_TYPE`, and the "indoor" is a misnomer: the
@@ -727,33 +729,25 @@ export const CAMERA_MEMBERS = {
     type: "enum",
     kind: "enum",
     enumValues: { 0: "Off", 1: "Infrared", 2: "Full Color" },
+    enumValuesFor: (ctx: AvailabilityContext) => (ctx.model === "T8442" ? { 0: "Off", 1: "Infrared" } : undefined),
     provenance: "verified",
-    available: (ctx: AvailabilityContext) => isCameraCodec(ctx) && ctx.model !== "T8442",
+    available: isCameraCodec,
+    readAvailable: (ctx: AvailabilityContext) => ctx.model !== "T8442",
+    readAliases: [{ paramType: 2002, available: (ctx: AvailabilityContext) => ctx.model === "T8442" }],
     description:
-      "Night-vision mode (NIGHT_VISION_TYPE 1277): 0 = off, 1 = infrared (B&W), 2 = full colour. " +
-      "✅ wire verified live (T8425 ch3): 1350 SET_PAYLOAD, mChannel 0, {channel:N, night_sion:mode}. " +
-      "Enum labels are best-guess. Some models omit full colour.",
+      "Night-vision mode: 0 = off, 1 = infrared (B&W), 2 = full colour where supported. " +
+      "T8425 uses NIGHT_VISION_TYPE 1277 (1350 SET_PAYLOAD, night_sion); T8442 reports 2002 " +
+      "and writes direct IC_NIGHT_VISION_TYPE 1013 (int-string, 0/1). Both wires verified live.",
     write: (v, ctx) => {
       const nv = coerceEnumValue(NightVision, v);
-      return nv == null
-        ? undefined
-        : setPayload(CAMERA_CMD.NIGHT_VISION_TYPE, { channel: ctx.channel, night_sion: nv }, ctx, 0, 0, "auto");
+      if (nv == null) return undefined;
+      if (ctx.model === "T8442") {
+        return nv === NightVision.FullColor
+          ? undefined
+          : setScalar(CAMERA_CMD.IC_NIGHT_VISION_TYPE, nv, ctx, "int-string");
+      }
+      return setPayload(CAMERA_CMD.NIGHT_VISION_TYPE, { channel: ctx.channel, night_sion: nv }, ctx, 0, 0, "auto");
     },
-  },
-  /**
-   * T8442 reports night-vision enable on cloud param 2002 (0=off, 1=on) rather than 1277.
-   * Both values and the direct IRCUT_SWITCH (1013) int-string writes were verified on hardware.
-   * Restrict this boolean to T8442; other camera families retain their existing night-vision mode.
-   */
-  nightVisionEnabled: {
-    param: 2002,
-    type: "bool",
-    kind: "boolean",
-    available: (ctx: AvailabilityContext) => isCameraCodec(ctx) && ctx.model === "T8442",
-    requiresRead: true,
-    provenance: "verified",
-    description: "T8442 night-vision enable (reported on 2002; direct IRCUT_SWITCH 1013 writes).",
-    write: (v, ctx) => setScalar(1013, asBool(v) ? 1 : 0, ctx, "int-string"),
   },
   /**
    * Live-view quality, the pair to {@link CAMERA_MEMBERS.recordingQuality} and a different setting on a

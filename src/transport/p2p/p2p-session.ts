@@ -247,9 +247,9 @@ const CMD_SET_PAYLOAD = 1350;
 const CMD_NOTIFY_PAYLOAD = 1351;
 /**
  * The one reply body read for a result code besides the bare four-byte int32: a `CMD_SET_PAYLOAD` answer of
- * exactly this many bytes, carrying the int32 LE code followed by nothing but zero padding. The length is
- * not 16-byte aligned, so the level-1 decrypt never opens such a body, and no level-1 plaintext — always a
- * whole number of blocks — can have it.
+ * exactly this many bytes on a sign-code-0 frame, the int32 LE code in its first four. The rest is whatever
+ * the device's reply buffer held: unspecified and is not examined. The sign code is what admits the read —
+ * a sign-code-0 body is plaintext as sent, never ciphertext the decrypt could not open.
  */
 const PADDED_RESULT_BYTES = 132;
 /** CMD_CAMERA_INFO — a camera reporting its OWN params, as a root-level array. */
@@ -2335,9 +2335,7 @@ export class P2PSession extends EventEmitter {
     // test alone would read its first word and report a fabricated code for a command whose answer
     // was never recovered. Media is excluded because its bodies are never control plaintext.
     const paddedResult =
-      header.commandId === CMD_SET_PAYLOAD &&
-      data.length === PADDED_RESULT_BYTES &&
-      data.subarray(4).every((b) => b === 0);
+      header.commandId === CMD_SET_PAYLOAD && header.signCode === 0 && data.length === PADDED_RESULT_BYTES;
     if (!isMedia && !frame.json && (data.length === 4 || paddedResult)) {
       this.emit("commandResult", { code: data.readInt32LE(0), channel: header.channel });
     }

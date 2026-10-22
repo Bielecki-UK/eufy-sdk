@@ -147,6 +147,24 @@ describe("resolveDevice — 3-tier composition", () => {
     expect(resolveDevice({ deviceType: 46 }).capabilities).not.toContain("ptz");
   });
 
+  it("does not advertise a spotlight from the params reported by T8171", () => {
+    // Three T8171 units on firmware 1.2.1.6 reported precisely these light-detection params.
+    const params = { 1400: "0", 1401: "80", 1403: "1" };
+    const e30 = resolveDevice({ model: "T8171", deviceType: DeviceType.SOLO_CAMERA_E30, params });
+    expect(e30.capabilities).not.toContain("light");
+    const properties = e30.properties.map((p) => p.name);
+    for (const name of ["light", "brightness", "spotlightEnabled", "colorTemp"]) {
+      expect(properties).not.toContain(name);
+    }
+    expect(resolveDevice({ model: "T8170", deviceType: 48, params }).capabilities).toContain("light");
+    for (const [param, value] of Object.entries(params)) {
+      expect(
+        resolveDevice({ model: "T8171", deviceType: DeviceType.SOLO_CAMERA_E30, params: { [param]: value } })
+          .capabilities,
+      ).not.toContain("light");
+    }
+  });
+
   it.each([undefined, DeviceType.CAMERA_POE_S4])(
     "recognizes PoE S4 pan-tilt without reported preset parameters (device type %s)",
     (deviceType) => {

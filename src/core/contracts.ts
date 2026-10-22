@@ -740,10 +740,9 @@ export interface LiveStreamConsumer extends LiveStreamHandle {
    * consumer receives, so a consumer holding media it has not been told the configuration of is not a state
    * it can reach.
    *
-   * Per consumer, against what THIS consumer was last given: a consumer that joins mid-session is primed
-   * with a cached keyframe it did not witness arriving, and one that crosses its bound resynchronises onto
-   * a later IDR having skipped the frame the source saw the change on. Announcing what the source saw
-   * would leave both holding an encoder built for media they never received.
+   * Per consumer, against what this consumer was last given: a mid-session join begins at its next live
+   * keyframe, and a consumer crossing its queue bound resynchronises onto a later IDR. Each receives
+   * the configuration of the media it is delivered, even when another consumer has already seen it.
    *
    * Only a consumer announces this, never a bare {@link LiveStreamHandle}: it is read from the parameter
    * sets a shared source watches every frame for, which the raw pull underneath it does not do. That is

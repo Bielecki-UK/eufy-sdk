@@ -167,7 +167,6 @@ const LIGHT_SWITCH_INT_STRING_TYPES: ReadonlySet<number> = new Set<number>([
   DeviceType.INDOOR_OUTDOOR_CAMERA_2K,
   DeviceType.INDOOR_OUTDOOR_CAMERA_1080P,
   DeviceType.OUTDOOR_PT_CAMERA,
-  DeviceType.SOLO_CAMERA_E30,
   DeviceType.CAMERA2C,
   DeviceType.CAMERA2,
   DeviceType.CAMERA2_PRO,
@@ -337,12 +336,14 @@ export const LIGHT: CapabilityModule = {
   description: "Floodlight / spotlight manual switch and brightness.",
   members: LIGHT_MEMBERS,
   properties: propertiesOf(LIGHT_MEMBERS),
-  // `light` = a real SPOTLIGHT, detected only from genuine spotlight params — NOT 1045 (that's the
-  // status LED, on every camera; it belongs to `camera`). Params: floodlight switch 1400, spotlight
-  // brightness/enable 1401/1403, indoor-spot enable/bright 6080/6082. Plus explicit light model names.
+  // Three T8171 units on firmware 1.2.1.6 report 1400/1401/1403 without a spotlight, so those
+  // param ids are not sufficient evidence for that model. The camera status LED (1045) is not light.
+  // Other models keep the existing param and name evidence.
   detection: {
-    evidenceParams: [1400, 1401, 1403, 6080, 6082, 1413],
     modelHints: [/floodlight|wall.?light|spot.?light|search.?light/i],
+    detect: (record) =>
+      record.model !== "T8171" &&
+      [1400, 1401, 1403, 6080, 6082, 1413].some((param) => Object.hasOwn(record.params ?? {}, param)),
   },
   /**
    * Only what the member table cannot express: `on`/`off` as no-argument verbs over the same wire as the

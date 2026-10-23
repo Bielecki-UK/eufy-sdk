@@ -235,6 +235,15 @@ function cellGated<T extends Members>(members: T): T {
 }
 
 /**
+ * The app's charger-state decode: `charging = value ∉ {0,2}`. The app applies this one rule both to a
+ * camera's `BATTERY_STATUS` (2111) and to a keypad's `APP_CMD_KEYPAD_BATTERY_CHARGER_STATE` (1655).
+ */
+export function isChargingState(v: string | number | boolean): boolean {
+  const n = Number(v);
+  return n !== 0 && n !== 2;
+}
+
+/**
  * Every `battery` feature, declared once — the property schema, the evidence-gated getters, the derived
  * setters, the intent routes and the descriptions all come out of this table. Order is schema order.
  *
@@ -271,10 +280,7 @@ export const BATTERY_MEMBERS = cellGated({
     type: "bool",
     kind: "boolean",
     provenance: "apk",
-    coerce: (v) => {
-      const n = Number(v);
-      return n !== 0 && n !== 2;
-    },
+    coerce: isChargingState,
     description:
       "Charging in progress — derived from BATTERY_STATUS (2111) as `value ∉ {0,2}`, matching the app's own " +
       "decode. 0/2 = not charging; a solar/USB charge (incl. a built-in solar panel, which reads 4) is non-zero.",

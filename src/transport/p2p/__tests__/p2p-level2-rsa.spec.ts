@@ -130,6 +130,24 @@ describe("P2PSession level-2 over an RSA cipher", () => {
     ]);
   });
 
+  /** A station whose cipher has no ECC key but sends no RSA-wrapped key still has a working session. */
+  test("an RSA key that does not unwrap the gateway info is traced and settled, not an error", async () => {
+    const { session, traces } = rsaSession();
+    const errors: unknown[] = [];
+    session.on("error", (e) => errors.push(e));
+
+    (session as unknown as SessionInternals).negotiateLevel2Key(gatewayInfo(Buffer.alloc(128, 0x33)));
+
+    expect(await session.awaitLevel2Key(1_000, "call", "set-payload")).toBe(false);
+    expect(errors).toEqual([]);
+    expect(traces.filter((trace) => trace.phase === "level2-unavailable")[0]).toEqual({
+      phase: "level2-unavailable",
+      reason: "derivation-failed",
+      cipherId: CIPHER_ID,
+      source: session.traceId,
+    });
+  });
+
   test("a wait for a key every sender can use answers false once the negotiation has concluded", async () => {
     const { session, traces } = await negotiatedSession();
 

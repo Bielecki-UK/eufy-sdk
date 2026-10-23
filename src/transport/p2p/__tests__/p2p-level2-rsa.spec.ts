@@ -130,7 +130,6 @@ describe("P2PSession level-2 over an RSA cipher", () => {
     ]);
   });
 
-  /** A station whose cipher has no ECC key but sends no RSA-wrapped key still has a working session. */
   test("an RSA key that does not unwrap the gateway info is traced and settled, not an error", async () => {
     const { session, traces } = rsaSession();
     const errors: unknown[] = [];
@@ -140,7 +139,7 @@ describe("P2PSession level-2 over an RSA cipher", () => {
 
     expect(await session.awaitLevel2Key(1_000, "call", "set-payload")).toBe(false);
     expect(errors).toEqual([]);
-    expect(traces.filter((trace) => trace.phase === "level2-unavailable")[0]).toEqual({
+    expect(traces.find((trace) => trace.phase === "level2-unavailable")).toEqual({
       phase: "level2-unavailable",
       reason: "derivation-failed",
       cipherId: CIPHER_ID,

@@ -106,10 +106,13 @@ const RECEIVE_BUFFER_BYTES = 4 * 1024 * 1024;
  * Published because it bounds every wait on a session connecting — a second number for the same deadline
  * elsewhere would outlive the connection it waits on and charge the difference to every failure.
  *
- * Thirty seconds is the budget the vendor app gives its own remote connect, which runs the hole-punch and,
- * once the lookup server has acknowledged the P2P request for 24 lookup rounds, the relay handshake inside it.
+ * The relay handshake starts once the lookup server has acknowledged the P2P request for 24 lookup rounds, so
+ * about 25 s in. The vendor app's own remote connect has a 30 s budget, which leaves the handshake 3–6 s; on a
+ * relay-only path some stations were measured not to finish inside that, failing at `relay: hello`. Forty-five
+ * seconds keeps the vendor's threshold and gives the handshake about 20 s to complete. A station that never
+ * acknowledges the request, as an offline one does, takes this long to fail.
  */
-export const CONNECT_TIMEOUT_MS = 30_000;
+export const CONNECT_TIMEOUT_MS = 45_000;
 /**
  * The channel a command addresses the station itself on, rather than one of its cameras, and the value a
  * session's channel-taking methods resolve an omitted channel to.

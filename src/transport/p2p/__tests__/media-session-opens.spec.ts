@@ -63,6 +63,7 @@ vi.mock("../p2p-session.js", async (importOriginal) => ({
 }));
 
 const { P2PCommandRouter } = await import("../command-router.js");
+const { CONNECT_TIMEOUT_MS } = await import("../p2p-session.js");
 type Router = InstanceType<typeof P2PCommandRouter>;
 
 const STATION_SN = "T8010P0000000000";
@@ -209,7 +210,7 @@ describe("a second live camera on a claimed station session", () => {
       nextSessionConnectsAfterMs = Infinity;
       const opened = openLive(r, CAM_B);
       const outcome = expect(opened).rejects.toMatchObject({ name: "StationUnreachableError", stationSn: STATION_SN });
-      await vi.advanceTimersByTimeAsync(30_400);
+      await vi.advanceTimersByTimeAsync(CONNECT_TIMEOUT_MS + 400);
 
       await outcome;
     } finally {

@@ -1,7 +1,7 @@
 import dgram from "node:dgram";
 import { once } from "node:events";
 import { describe, expect, it, vi } from "vitest";
-import { P2PSession } from "../p2p-session.js";
+import { CONNECT_TIMEOUT_MS, P2PSession } from "../p2p-session.js";
 import {
   RequestMessageType,
   ResponseMessageType,
@@ -117,6 +117,63 @@ describe("PPCS relay fallback", () => {
     }
   }, 20_000);
 
+  /**
+   * A relay that is slow to answer RLY_HELLO still connects: the relay starts about 25 s in, and the connect
+   * budget leaves its handshake room past 30 s.
+   */
+  it("connects through a relay whose handshake finishes after 30 s, inside the connect budget", async () => {
+    const cloud = await peer();
+    const relay = await peer();
+    const relayed = await peer();
+    const IGNORED_HELLOS = 7;
+    let hellos = 0;
+    const connected = vi.fn();
+    const errors: Error[] = [];
+    vi.useFakeTimers({ toFake: ["setTimeout", "setInterval"] });
+    const session = new P2PSession({
+      stationSn: STATION_SN,
+      p2pDid: P2P_DID,
+      dskKey: "0".repeat(20),
+      cloudAddresses: [{ host: "127.0.0.1", port: cloud.address().port }],
+      noBroadcast: true,
+    });
+    session.on("error", (error: Error) => errors.push(error));
+    session.on("connect", connected);
+    cloud.on("message", (msg, remote) => {
+      acksLookups(cloud, msg, remote);
+      if (hasHeader(msg, RequestMessageType.LOOKUP_WITH_KEY2)) {
+        const list = Buffer.concat([Buffer.from([1, 0, 0, 0]), loopbackRecord(relay.address().port)]);
+        cloud.send(frameMessage(ResponseMessageType.LIST_REQ_ACK, list), remote.port, remote.address);
+      } else if (hasHeader(msg, RequestMessageType.RLY_REQ)) {
+        cloud.send(frameMessage(ResponseMessageType.RLY_REQ_ACK, Buffer.alloc(4)), remote.port, remote.address);
+        relayed.send(frameMessage(ResponseMessageType.RLY_RDY, p2pDidToBuffer(P2P_DID)), remote.port, remote.address);
+      }
+    });
+    relay.on("message", (msg, remote) => {
+      if (hasHeader(msg, RequestMessageType.RLY_HELLO) && ++hellos > IGNORED_HELLOS)
+        relay.send(frameMessage(ResponseMessageType.RLY_HELLO_ACK), remote.port, remote.address);
+      if (hasHeader(msg, RequestMessageType.RLY_PORT)) {
+        const ack = Buffer.alloc(8);
+        ack.writeUInt16BE(relayed.address().port, 4);
+        relay.send(frameMessage(ResponseMessageType.RLY_PORT_ACK, ack), remote.port, remote.address);
+      }
+    });
+    try {
+      await session.connect();
+      await elapse(30_000);
+      expect(connected).not.toHaveBeenCalled();
+      await elapse(5_000);
+      expect(connected).toHaveBeenCalledOnce();
+      expect(errors).toEqual([]);
+    } finally {
+      vi.useRealTimers();
+      await session.close();
+      cloud.close();
+      relay.close();
+      relayed.close();
+    }
+  }, 20_000);
+
   it("takes the port only from a relay the list named", () => {
     const send = vi.fn();
     const session = new P2PSession({
@@ -197,7 +254,7 @@ describe("a connect that times out", () => {
     session.on("error", (error: Error) => errors.push(error));
     try {
       await session.connect();
-      await elapse(30_000);
+      await elapse(CONNECT_TIMEOUT_MS);
       expect(errors.map((e) => e.message)).toEqual([`P2P connect timeout for ${STATION_SN} (relay: list)`]);
     } finally {
       vi.useRealTimers();
@@ -220,7 +277,7 @@ describe("a connect that times out", () => {
     session.on("error", (error: Error) => errors.push(error));
     try {
       await session.connect();
-      await elapse(30_000);
+      await elapse(CONNECT_TIMEOUT_MS);
       expect(errors.map((e) => e.message)).toEqual([`P2P connect timeout for ${STATION_SN} (relay: not started)`]);
     } finally {
       vi.useRealTimers();
@@ -236,7 +293,7 @@ describe("a connect that times out", () => {
     session.on("error", (error: Error) => errors.push(error));
     try {
       await session.connect();
-      await vi.advanceTimersByTimeAsync(30_000);
+      await vi.advanceTimersByTimeAsync(CONNECT_TIMEOUT_MS);
       expect(errors.map((e) => e.message)).toEqual([`P2P connect timeout for ${STATION_SN} (relay: no cloud lookup)`]);
     } finally {
       vi.useRealTimers();

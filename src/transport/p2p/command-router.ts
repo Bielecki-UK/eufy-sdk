@@ -32,6 +32,12 @@ import {
   StationKeyUnavailableError,
   StationUnreachableError,
 } from "../../core/contracts.js";
+import {
+  buildKeyedActuatePayload,
+  KEYED_PAYLOAD_SEQ_ERROR,
+  keyedPayloadReportCode,
+  keyedPayloadSeqMark,
+} from "./keyed-payload.js";
 import { noopLogger, type Logger } from "../../core/logger.js";
 import { assertNever } from "../../core/util.js";
 import { setTimeout as sleep } from "node:timers/promises";
@@ -301,6 +307,19 @@ export class P2PCommandRouter {
   private readonly cipherKeyCache = new Map<number, { ecc?: string; rsa?: string }>();
   /** The recording download in flight per station; a station serves one at a time. */
   private readonly recordingDownloads = new Map<string, Promise<unknown>>();
+
+  /**
+   * The `seq_num` last sent to each device over the keyed-payload wire. The device holds a mark for the life
+   * of a P2P connection: the first keyed command on a new connection is accepted at whatever number it
+   * carries and becomes the mark, and after that a number not above the mark is refused with the mark
+   * published ({@link keyedPayloadSeqMark}). Each accepted command moves this to its number, a refusal
+   * moves it to the published mark + 1, and a device absent here has not been sent one in this process and
+   * seeds from a small random number — which a new connection takes as sent.
+   */
+  private readonly keyedSequences = new Map<string, number>();
+
+  /** The keyed-payload command in flight per device, which the next one for that device waits on. */
+  private readonly keyedQueue = new Map<string, Promise<void>>();
 
   constructor(private readonly deps: P2PRouterDeps) {
     this.manager = new SessionManager({
@@ -681,6 +700,9 @@ export class P2PCommandRouter {
         return;
       case "ff09-actuate":
         await this.sendFf09Actuate(sn, cmd);
+        return;
+      case "keyed-payload-actuate":
+        await this.sendKeyedPayloadActuate(sn, cmd);
         return;
       case "ff09-autolock":
         await this.sendFf09Autolock(sn, cmd);
@@ -1820,6 +1842,177 @@ export class P2PCommandRouter {
       resolved ?? (await this.resolveSession(sn, { waitLevel2: true, level2Sender })),
     );
   }
+
+  /**
+   * **`keyed-payload-actuate` intent** — the classic Wi-Fi lock's actuation: the sealed fields from
+   * {@link buildKeyedActuatePayload}, sent as a keyed envelope through {@link P2PSession.sendSetPayload}
+   * on the lock's device channel. No session key is waited for — the envelope seals its own per-command
+   * key for the device's public key (fetched from the cloud, cached per serial), so it goes as soon as
+   * the session is up. The device shows the acting member by display name, which lives on the device
+   * record's `member` rather than in the intent, so it is read here and falls back to the account name
+   * the intent carries.
+   *
+   * The device answers, so the outcome is read rather than assumed: {@link awaitKeyedReply} settles each
+   * send on the replies, and resolves a {@link KEYED_PAYLOAD_SEQ_ERROR} refusal with the mark the device
+   * publishes in the refusal's `CMD_DOORLOCK_P2P_SEQ` (1916) twin. On that mark the command resends once,
+   * at mark + 1; a second refusal, or a refusal that published no mark, throws. Commands run one at a time
+   * per device: the replies carry no correlation id, so one command's answer must never be read as
+   * another's.
+   */
+  private sendKeyedPayloadActuate(sn: string, cmd: Ff09Identity): Promise<void> {
+    return this.serializeKeyed(sn, async () => {
+      const dev = await this.deviceFor(sn);
+      const member = ((dev.raw ?? {}) as Record<string, unknown>).member as Record<string, unknown> | undefined;
+      const userName = typeof member?.nick_name === "string" && member.nick_name ? member.nick_name : cmd.username;
+      const devicePublicKey = await this.deps.mega.getDevicePublicKey(sn);
+      const resolved = await this.resolveSession(sn, { waitLevel2: false });
+      const send = (seqNum: number): void => {
+        const { key, payload } = buildKeyedActuatePayload(cmd, devicePublicKey, userName, { seqNum });
+        resolved.session.sendSetPayload(CommandType.P2P_ON_OFF_LOCK, payload, {
+          accountId: cmd.adminUserId,
+          channel: resolved.channel,
+          key,
+        });
+      };
+      await this.sendKeyedAtSequence(sn, resolved.session, resolved.channel, cmd.engage, send);
+    });
+  }
+
+  /** Run `work` once every keyed-payload command already queued for `sn` has settled. */
+  private serializeKeyed<T>(sn: string, work: () => Promise<T>): Promise<T> {
+    const previous = this.keyedQueue.get(sn) ?? Promise.resolve();
+    const run = previous.then(work);
+    const settled = run.then(
+      () => undefined,
+      () => undefined,
+    );
+    this.keyedQueue.set(sn, settled);
+    void settled.then(() => {
+      if (this.keyedQueue.get(sn) === settled) this.keyedQueue.delete(sn);
+    });
+    return run;
+  }
+
+  /**
+   * Send one keyed command at the device's next sequence and, on a sequence refusal, resend once at the
+   * mark the refusal published.
+   *
+   * A device's first number in a process is a small random seed — the scale the vendor app's own counters
+   * run at — and every later one is the previous plus one. The device takes the first number on a new
+   * connection as sent, and from then on refuses one not above the mark it holds, stating the mark in the
+   * refusal's `CMD_DOORLOCK_P2P_SEQ` (1916) twin ({@link awaitKeyedReply} resolves the refusal with it).
+   * So a refusal is resolved to that mark and the command resent once at mark + 1, the number the device
+   * accepts after a refusal; a second refusal, or a refusal that carried no mark, throws. The accepted
+   * number is recorded, so the next command starts just above it.
+   *
+   * @param engage whether the command drives to the engaged (locked) state, which its own report states.
+   * @param send dispatches the envelope at the sequence it is given.
+   */
+  private async sendKeyedAtSequence(
+    sn: string,
+    session: P2PSession,
+    channel: number,
+    engage: boolean,
+    send: (seqNum: number) => void,
+  ): Promise<void> {
+    const last = this.keyedSequences.get(sn);
+    const first = last === undefined ? Math.trunc(Math.random() * 1000) : last + 1;
+    this.keyedSequences.set(sn, first);
+    const reply = await this.awaitKeyedReply(sn, session, channel, engage, () => send(first));
+    if (reply.code === 0) return;
+    if (reply.code !== KEYED_PAYLOAD_SEQ_ERROR || reply.mark === undefined) {
+      throw new Error(`keyed-payload command rejected by ${sn} with code ${reply.code}`);
+    }
+    const resend = reply.mark + 1;
+    this.keyedSequences.set(sn, resend);
+    const second = await this.awaitKeyedReply(sn, session, channel, engage, () => send(resend));
+    if (second.code === 0) return;
+    throw new Error(`keyed-payload command rejected by ${sn} with code ${second.code}`);
+  }
+
+  /**
+   * Send one keyed-payload command and read the device's answer for it from the replies on the command's
+   * channel: the `SET_PAYLOAD` echo (a `commandResult`), at once, carrying the result as an int32 — or,
+   * when the echo was not read and the command changed the device's state, the `NOTIFY_PAYLOAD` about two
+   * seconds later carrying the result again as a `P2P_QUERY_STATUS_IN_LOCK` (1955) document. A report
+   * is tied to the command by its `slState`: only one stating the state this command drives to, by
+   * `engage` ({@link keyedPayloadReportCode}), is read as its answer. A report of the other state is a
+   * previous command's, landing after that command settled on its echo, and is ignored.
+   *
+   * - An accepted result (code `0`) settles the command.
+   * - A sequence refusal is stated twice, both about a tenth of a second after the send: the `-151` echo
+   *   and a `CMD_DOORLOCK_P2P_SEQ` (1916) notify whose `seq_num` is the mark the device holds. The
+   *   resolved value carries that mark, so the caller resends just above it. Collection runs for
+   *   {@link KEYED_REFUSAL_TWIN_MS} after the first of the two, so both land and neither is left on the
+   *   channel for the resend to read as its own answer, and either one alone still resolves the refusal.
+   * - No reply within {@link KEYED_REPLY_MS} is a command that never landed, and rejects.
+   *
+   * Both listeners are armed before the send, and only replies on `channel` are read. The channel names
+   * the device, not the command: every other P2P write a lock takes waits for a level-2 key this device
+   * never negotiates, so nothing else the SDK sends can draw a reply here, and a future intent on this
+   * wrapper has to share {@link serializeKeyed}.
+   */
+  private awaitKeyedReply(
+    sn: string,
+    session: P2PSession,
+    channel: number,
+    engage: boolean,
+    send: () => void,
+  ): Promise<{ code: number; mark?: number }> {
+    return new Promise((resolve, reject) => {
+      let refused = false;
+      let mark: number | undefined;
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const settle = (outcome: () => void): void => {
+        if (timer) clearTimeout(timer);
+        session.off("commandResult", onResult);
+        session.off("data", onData);
+        outcome();
+      };
+      const expire = (ms: number, onExpiry: () => void): void => {
+        if (timer) clearTimeout(timer);
+        timer = setTimeout(onExpiry, ms);
+      };
+      const refuse = (): void => {
+        if (refused) return;
+        refused = true;
+        expire(P2PCommandRouter.KEYED_REFUSAL_TWIN_MS, () =>
+          settle(() => resolve({ code: KEYED_PAYLOAD_SEQ_ERROR, mark })),
+        );
+      };
+      const onResult = (r: { code: number; channel: number }): void => {
+        if (r.channel !== channel) return;
+        if (r.code === KEYED_PAYLOAD_SEQ_ERROR) refuse();
+        else if (!refused) settle(() => resolve({ code: r.code }));
+      };
+      const onData = (f: P2PFrame): void => {
+        if (f.channel !== channel || f.commandId !== CommandType.CMD_NOTIFY_PAYLOAD) return;
+        const published = keyedPayloadSeqMark(f.json);
+        if (published !== undefined) {
+          mark = published;
+          return refuse();
+        }
+        const code = keyedPayloadReportCode(f.json, engage);
+        if (code !== undefined && !refused) settle(() => resolve({ code }));
+      };
+      session.on("commandResult", onResult);
+      session.on("data", onData);
+      expire(P2PCommandRouter.KEYED_REPLY_MS, () =>
+        settle(() => reject(new Error(`keyed-payload command to ${sn} drew no reply`))),
+      );
+      try {
+        send();
+      } catch (e) {
+        settle(() => reject(e));
+      }
+    });
+  }
+
+  /** How long a keyed-payload command waits for any reply before it is taken as never having landed. */
+  private static readonly KEYED_REPLY_MS = 6000;
+
+  /** How long a refusal collects its two statements — the `-151` echo and the mark notify — before resolving. */
+  private static readonly KEYED_REFUSAL_TWIN_MS = 500;
 
   /**
    * **`ff09-actuate` intent** — build the `ff09` AES-128-CBC frame ({@link buildFf09Frame}, shared with the

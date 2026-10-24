@@ -1237,7 +1237,7 @@ export class EufyMega extends EventEmitter {
    * kind and stays transport-agnostic; only the facade sees both sides and decides here. A T9000 or T8N00
    * station and the devices attached to it go over RTC, with an attached device's command refused
    * unless its channel resolves back to it on the station. T8N00 uses full SDP and admits direct and
-   * relay candidates; T9000 retains compact SDP and relay-only candidates. A T8223/T8224 doorbell's route serves
+   * relay candidates; T9000 retains compact SDP and relay-only candidates. A call doorbell's route serves
    * media only, and the RTC router refuses a command on it. Everything else is P2P.
    */
   private routeCommand(sn: string, cmd: Command): Promise<void> {
@@ -1270,7 +1270,7 @@ export class EufyMega extends EventEmitter {
   }
 
   /**
-   * The RTC route for a T9000 or T8N00 station or a device attached to one, or a T8223/T8224 doorbell that is its
+   * The RTC route for a T9000 or T8N00 station or a device attached to one, or a call doorbell that is its
    * own station, decided by the station's model classification; `undefined` for any other device. A T8N00
    * route carries its native `call` signalling; a doorbell route does too, and streams its video on a media
    * track. The admin id is the station's `member.admin_user_id`, else the logged-in user.

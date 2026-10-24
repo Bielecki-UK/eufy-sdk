@@ -708,8 +708,8 @@ export class P2PSession extends EventEmitter {
    * `resolveCipherKey`), run the ECIES unwrap with the ECC key, and `setLevel2Key()`. A cipher with no
    * ECC key uses its RSA key instead and holds the RSA-decrypted 16-byte key as the AES-128-ECB level-2
    * key. One-shot; emits `level2Ready` only when the AES-256-GCM key is negotiated, traces
-   * `level2-set-payload-only` instead for the AES-128-ECB key, and emits `error` on failure
-   * (non-fatal — level-1 traffic keeps working regardless).
+   * `level2-set-payload-only` instead for the AES-128-ECB key, and emits `error` when the ECC unwrap
+   * fails; an RSA unwrap failure is only traced (non-fatal either way — level-1 traffic keeps working).
    *
    * Every outcome settles the wait in {@link awaitLevel2Key}, because being one-shot is what makes a
    * failure final for this connection generation: nothing will retry it there, so a later command must be
@@ -740,7 +740,7 @@ export class P2PSession extends EventEmitter {
         if (!key) {
           this.trace({ phase: "level2-unavailable", reason: "derivation-failed", cipherId });
           this.settleLevel2();
-          this.emit("error", new Error(`level-2 key derivation failed (cipher_id ${cipherId})`));
+          if (eccPrivHex) this.emit("error", new Error(`level-2 key derivation failed (cipher_id ${cipherId})`));
           return;
         }
         if (eccPrivHex) {

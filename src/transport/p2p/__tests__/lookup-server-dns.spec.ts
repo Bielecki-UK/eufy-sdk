@@ -4,14 +4,14 @@ import { describe, expect, it, vi } from "vitest";
 import { RequestMessageType, hasHeader } from "../codec.js";
 
 /**
- * A lookup server named by hostname is resolved once per connect, and every lookup and relay datagram goes to
- * the resolved address. Sending each datagram to the hostname costs one `dns.lookup` per datagram, on the
+ * A lookup server named by hostname is resolved once per connect, in the background, and every lookup and relay
+ * datagram after that goes to the resolved address. A datagram sent to a hostname costs a `dns.lookup` on the
  * threadpool HTTP requests resolve on too.
  */
-const lookup = vi.fn(async (_host: string, _opts: object) => ({ address: "127.0.0.1", family: 4 }));
+const resolve4 = vi.fn(async (_host: string): Promise<string[]> => ["127.0.0.1"]);
 vi.mock("node:dns/promises", async (importOriginal) => ({
   ...(await importOriginal<typeof import("node:dns/promises")>()),
-  lookup: (host: string, opts: object) => lookup(host, opts),
+  resolve4: (host: string) => resolve4(host),
 }));
 
 const { P2PSession } = await import("../p2p-session.js");
@@ -46,17 +46,14 @@ describe("lookup servers named by hostname", () => {
       stationSn: STATION_SN,
       p2pDid: P2P_DID,
       dskKey: "0".repeat(20),
-      cloudAddresses: [
-        { host: "p2p-lookup.invalid", port: cloud.address().port },
-        { host: "127.0.0.1", port: cloud.address().port },
-      ],
+      cloudAddresses: [{ host: "p2p-lookup.invalid", port: cloud.address().port }],
       noBroadcast: true,
     });
     session.on("error", () => undefined);
     try {
       await session.connect();
       await elapse(5_000);
-      expect(lookup.mock.calls.map(([host]) => host)).toEqual(["p2p-lookup.invalid"]);
+      expect(resolve4.mock.calls.map(([host]) => host)).toEqual(["p2p-lookup.invalid"]);
       expect(lookups).toBeGreaterThan(10);
     } finally {
       vi.useRealTimers();
@@ -64,4 +61,25 @@ describe("lookup servers named by hostname", () => {
       cloud.close();
     }
   }, 20_000);
+
+  /** The lookups start without waiting on DNS, so a slow resolver cannot hold back the LAN lookup or the connect deadline. */
+  it("starts the lookups while a hostname is still resolving", async () => {
+    resolve4.mockImplementationOnce(() => new Promise<string[]>(() => undefined));
+    const session = new P2PSession({
+      stationSn: STATION_SN,
+      p2pDid: P2P_DID,
+      dskKey: "0".repeat(20),
+      cloudAddresses: [{ host: "p2p-lookup.invalid", port: 32100 }],
+      noBroadcast: true,
+    });
+    session.on("error", () => undefined);
+    const internals = session as unknown as { lookupTimer?: unknown; connectTimer?: unknown };
+    try {
+      await session.connect();
+      expect(internals.lookupTimer).toBeDefined();
+      expect(internals.connectTimer).toBeDefined();
+    } finally {
+      await session.close();
+    }
+  });
 });

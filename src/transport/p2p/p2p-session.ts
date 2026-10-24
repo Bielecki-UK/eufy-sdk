@@ -107,10 +107,9 @@ const RECEIVE_BUFFER_BYTES = 4 * 1024 * 1024;
  * elsewhere would outlive the connection it waits on and charge the difference to every failure.
  *
  * The relay handshake starts once the lookup server has acknowledged the P2P request for 24 lookup rounds, so
- * about 25 s in. The vendor app's own remote connect has a 30 s budget, which leaves the handshake 3–6 s; on a
- * relay-only path some stations were measured not to finish inside that, failing at `relay: hello`. Forty-five
- * seconds keeps the vendor's threshold and gives the handshake about 20 s to complete. A station that never
- * acknowledges the request, as an offline one does, takes this long to fail.
+ * about 25 s in. The vendor app's own remote connect has a 30 s budget, which leaves the handshake 3–6 s.
+ * Forty-five seconds keeps the vendor's threshold and gives the handshake about 20 s to complete. A station that
+ * never acknowledges the request, as an offline one does, takes this long to fail.
  */
 export const CONNECT_TIMEOUT_MS = 45_000;
 /**

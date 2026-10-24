@@ -315,7 +315,7 @@ describe("doorbell — confirmed against real T8214", () => {
 
   it("types the battery T8213 as a doorbell", () => {
     // Without its registry row the raw T-code missed the doorbell model hint, so a T8213's presses
-    // arrived but the host built no doorbell event or ring trigger (ha-eufy-sdk#38).
+    // arrived but the host built no doorbell event or ring trigger.
     const r = resolveDevice({ model: "T8213", deviceType: 91 });
     expect(r.capabilities).toContain("doorbell");
     expect(r.capabilities).toContain("battery");

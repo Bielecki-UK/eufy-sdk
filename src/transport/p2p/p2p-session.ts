@@ -15,6 +15,8 @@
  */
 import { EventEmitter } from "node:events";
 import dgram from "node:dgram";
+import { lookup } from "node:dns/promises";
+import { isIP } from "node:net";
 import {
   constants,
   createCipheriv,
@@ -235,6 +237,29 @@ const SEQUENCE_LOOKBACK = 0x8000;
  * so the depth is what caps that second cost, at a bounded run of datagrams instead of half the space.
  */
 const STALE_RETRANSMIT_DEPTH = 1024;
+
+/**
+ * The lookup servers with each hostname resolved to one IPv4 address, once.
+ *
+ * Every lookup round sends to every lookup server from the session's socket and each punch probe, and the relay
+ * handshake adds its own sends to them. A datagram sent to a hostname costs a `dns.lookup` on libuv's
+ * threadpool, the pool HTTP requests resolve on too, so a connect that runs its full budget would spend
+ * hundreds of them per station. An address already given as an IP passes through; a hostname that does not resolve is kept
+ * as given, so its sends resolve per datagram as before.
+ */
+async function resolveLookupServers(addresses: Address[]): Promise<Address[]> {
+  return Promise.all(
+    addresses.map(async (addr) => {
+      if (isIP(addr.host)) return addr;
+      try {
+        const { address } = await lookup(addr.host, { family: 4 });
+        return { host: address, port: addr.port };
+      } catch {
+        return addr;
+      }
+    }),
+  );
+}
 
 /** Additional UDP source ports registered alongside the session's own during cloud lookup. */
 const PUNCH_PROBE_SOCKETS = 7;
@@ -888,7 +913,11 @@ export class P2PSession extends EventEmitter {
     });
 
     const { dskKey, cloudAddresses } = this.cfg;
-    this.cloudLookup = dskKey && cloudAddresses?.length ? { key: dskKey, addresses: cloudAddresses } : undefined;
+    this.cloudLookup =
+      dskKey && cloudAddresses?.length
+        ? { key: dskKey, addresses: await resolveLookupServers(cloudAddresses) }
+        : undefined;
+    if (this.closed) return;
     if (this.cloudLookup) await this.startPunchProbes();
     if (this.closed) return;
     this.trace({

@@ -170,6 +170,9 @@ from its reported capabilities. See [Devices & capabilities](/devices) for how r
   <figcaption>Battery Doorbell 2K <span class="model">T8210</span></figcaption>
 </figure>
 <figure>
+  <figcaption>Video Doorbell 2K <span class="model">T8212</span></figcaption>
+</figure>
+<figure>
   <img src="/devices/security/security-T8213.webp" alt="Battery Doorbell 2K Dual T8213" loading="lazy" />
   <figcaption>Battery Doorbell 2K Dual <span class="model">T8213</span></figcaption>
 </figure>
@@ -368,6 +371,9 @@ from its reported capabilities. See [Devices & capabilities](/devices) for how r
   <figcaption>PoE Bullet PTZ Cam S4 <span class="model">T8E00</span></figcaption>
 </figure>
 <figure>
+  <figcaption>PoE Cam E40 <span class="model">T8P00</span></figcaption>
+</figure>
+<figure>
   <img src="/devices/security/security-T8W11C.webp" alt="Indoor Cam C220 T8W11 · T8W11C · T8419N" loading="lazy" />
   <figcaption>Indoor Cam C220 <span class="model">T8W11 · T8W11C · T8419N</span></figcaption>
 </figure>
@@ -502,6 +508,9 @@ from its reported capabilities. See [Devices & capabilities](/devices) for how r
 <figure>
   <img src="/devices/security/security-T8920.webp" alt="water freeze sensor t8920 T8920" loading="lazy" />
   <figcaption>water freeze sensor t8920 <span class="model">T8920</span></figcaption>
+</figure>
+<figure>
+  <figcaption>Entry Sensor E20 <span class="model">T90E0</span></figcaption>
 </figure>
 <figure>
   <img src="/devices/security/security-T90F0.webp" alt="flood freeze sensor e20 t90F0 T90F0" loading="lazy" />
@@ -748,6 +757,18 @@ The eufy **Clean** line — robot **vacuums** (the classic **RoboVac** and newer
 <figure>
   <img src="/devices/mower/mower-T2880.webp" alt="Mower E15 T2880" loading="lazy" />
   <figcaption>Mower E15 <span class="model">T2880</span></figcaption>
+</figure>
+
+</div>
+
+## 👶 Baby
+
+### 👶 Baby monitors
+
+<div class="device-gallery">
+
+<figure>
+  <figcaption>Baby Monitor E21 <span class="model">T8354</span></figcaption>
 </figure>
 
 </div>

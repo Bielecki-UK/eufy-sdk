@@ -178,7 +178,7 @@ from its reported capabilities. See [Devices & capabilities](/devices) for how r
   <figcaption>Battery Doorbell E340 <span class="model">T8214</span></figcaption>
 </figure>
 <figure>
-  <figcaption>Doorbell S4 <span class="model">T8215</span></figcaption>
+  <figcaption>Wired Doorbell S4 <span class="model">T8215</span></figcaption>
 </figure>
 <figure>
   <figcaption>Battery Doorbell Slim <span class="model">T8220</span></figcaption>

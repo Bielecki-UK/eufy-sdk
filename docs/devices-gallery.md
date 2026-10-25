@@ -370,6 +370,7 @@ from its reported capabilities. See [Devices & capabilities](/devices) for how r
   <figcaption>PoE Bullet PTZ Cam S4 <span class="model">T8E00</span></figcaption>
 </figure>
 <figure>
+  <img src="/devices/security/security-T8P00.webp" alt="PoE Cam E40 T8P00" loading="lazy" />
   <figcaption>PoE Cam E40 <span class="model">T8P00</span></figcaption>
 </figure>
 <figure>

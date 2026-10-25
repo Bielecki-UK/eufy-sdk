@@ -141,6 +141,7 @@ from its reported capabilities. See [Devices & capabilities](/devices) for how r
   <figcaption>NVR S4 Max <span class="model">T8N00</span></figcaption>
 </figure>
 <figure>
+  <img src="/devices/security/security-T9000.webp" alt="HomeBase S1 Pro T9000" loading="lazy" />
   <figcaption>HomeBase S1 Pro <span class="model">T9000</span></figcaption>
 </figure>
 
@@ -178,6 +179,7 @@ from its reported capabilities. See [Devices & capabilities](/devices) for how r
   <figcaption>Battery Doorbell E340 <span class="model">T8214</span></figcaption>
 </figure>
 <figure>
+  <img src="/devices/security/security-T8215.webp" alt="Video Doorbell S4 T8215" loading="lazy" />
   <figcaption>Video Doorbell S4 <span class="model">T8215</span></figcaption>
 </figure>
 <figure>

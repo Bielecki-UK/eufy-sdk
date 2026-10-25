@@ -57,15 +57,22 @@ Worth knowing:
 - `record()` opens its own pull instead of joining the shared source, so it costs a second stream on a
   camera that is already streaming. `recordFragments()` is a shared consumer like everything else.
 
-## T8N00 PoE cameras
+## Cameras behind a T8N00
 
-T8E00, T8P00 and T8P10 cameras attached to a T8N00 support `live()`, `openReadable()` and
-`snapshotLive()`. `live()` delivers H.265 video and AAC-LC or G.711 A-law audio;
-`openReadable()` provides video, and `snapshotLive()` captures a fresh still.
-Recording and talkback are not implemented for this route.
+Every camera attached to a T8N00 supports `live()`, `openReadable()` and `snapshotLive()`
+through the NVR, whatever its model: the NVR serves the media, not the camera. This is
+confirmed on PoE cameras (T8E00 S4, T8P00 E40, T8P10 E41) and on cameras paired to the NVR
+as their base (T8162 eufyCam S3 Pro, T8410 Indoor Cam Pan&Tilt 2K, T8214 Video Doorbell
+E340). `live()` delivers H.265 video and AAC-LC or G.711 A-law audio; `openReadable()`
+provides video, and `snapshotLive()` captures a fresh still. Recording and talkback are
+not implemented for this route.
+
+A battery camera behind the NVR wakes before its first frame, which took about 10 s on a
+T8162; a wired camera answered in about 2.5 s. The T8214 dual-camera doorbell delivers
+both lenses stitched into one 1600×2200 frame on view `0`.
 
 `cam.views?.()` reports the optical view identifiers supported by this route: `[0, 1]`
-for the dual-lens T8E00 S4 and `[0]` for the T8P00 E40 and T8P10 E41. On the S4, view `0` is fixed
+for the dual-lens T8E00 S4 and `[0]` for every other camera. On the S4, view `0` is fixed
 and view `1` is movable. Omitting `view` selects `0`.
 
 ```ts

@@ -58,20 +58,16 @@ function fixture(model: string, name: string) {
 afterEach(() => vi.restoreAllMocks());
 
 describe("public NVR camera media binding", () => {
-  it.each(["unknown-model", "missing-channel", "different-station"])(
-    "does not admit %s to NVR media",
-    async (scenario) => {
-      const { client, internals } = fixture("T8P00", "Synthetic PoE Cam E40");
-      const records = internals.registry.devices as EufyDevice[];
-      if (scenario === "unknown-model") records[1]!.model = "T0000";
-      if (scenario === "missing-channel") records[1]!.raw = { parent_sn: HUB };
-      if (scenario === "different-station") records[0]!.model = "T8010";
-      const provider = vi.spyOn(internals.rtc, "nvrMediaProviderFor");
-      await client.getDevice(CAMERA);
-      expect(provider).not.toHaveBeenCalled();
-      internals.rtc.close();
-    },
-  );
+  it.each(["missing-channel", "different-station"])("does not admit %s to NVR media", async (scenario) => {
+    const { client, internals } = fixture("T8P00", "Synthetic PoE Cam E40");
+    const records = internals.registry.devices as EufyDevice[];
+    if (scenario === "missing-channel") records[1]!.raw = { parent_sn: HUB };
+    if (scenario === "different-station") records[0]!.model = "T8010";
+    const provider = vi.spyOn(internals.rtc, "nvrMediaProviderFor");
+    await client.getDevice(CAMERA);
+    expect(provider).not.toHaveBeenCalled();
+    internals.rtc.close();
+  });
   it("preserves cancellation and login failures from the public snapshot caller", async () => {
     const { client, internals } = fixture("T8P00", "Synthetic PoE Cam E40");
     const device = await client.getDevice(CAMERA);
@@ -86,15 +82,15 @@ describe("public NVR camera media binding", () => {
     ["T8E00", 0],
     ["T8P00", 0],
     ["T8P10", 0],
+    ["T8162", 0],
+    ["T8410", 0],
+    ["T8214", 0],
   ] as const)("starts %s through its public camera capability with sensor %s", async (model, sensor) => {
     vi.spyOn(RtcSession.prototype, "connect").mockImplementation(async function (this: RtcSession) {
       this.emit("connected");
     });
     const sent = vi.spyOn(RtcSession.prototype, "sendCommand").mockReturnValue(true);
-    const { client, internals, p2p } = fixture(
-      model,
-      `Synthetic PoE ${model === "T8E00" ? "Bullet PTZ Cam S4" : model === "T8P10" ? "Cam E41" : "Cam E40"}`,
-    );
+    const { client, internals, p2p } = fixture(model, `Synthetic ${model} behind an NVR`);
     try {
       const device = await client.getDevice(CAMERA);
       const stream = await device.camera?.()?.live?.();
@@ -116,6 +112,9 @@ describe("public NVR camera media binding", () => {
     ["T8E00", "Synthetic PoE Bullet PTZ Cam S4"],
     ["T8P00", "Synthetic PoE Cam E40"],
     ["T8P10", "Synthetic PoE Cam E41"],
+    ["T8162", "Synthetic eufyCam paired to an NVR"],
+    ["T8410", "Synthetic camera paired to an NVR"],
+    ["T8214", "Synthetic Video Doorbell paired to an NVR"],
   ])("binds %s media without falling through to the unreachable P2P provider", async (model, name) => {
     const { client, p2p } = fixture(model, name);
     const device = await client.getDevice(CAMERA);
@@ -181,6 +180,8 @@ describe("public NVR optical view selection", () => {
     ["T8E00", "Synthetic PoE Bullet PTZ Cam S4", [0, 1]],
     ["T8P00", "Synthetic PoE Cam E40", [0]],
     ["T8P10", "Synthetic PoE Cam E41", [0]],
+    ["T8162", "Synthetic eufyCam paired to an NVR", [0]],
+    ["T8214", "Synthetic Video Doorbell paired to an NVR", [0]],
   ] as const)("reports the supported views for %s", async (model, name, views) => {
     const { client, internals } = fixture(model, name);
     try {

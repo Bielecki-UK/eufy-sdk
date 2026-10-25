@@ -20,7 +20,11 @@ function fixture(stationType: number = DeviceType.STATION_9000) {
   });
   const internals = client as unknown as {
     registry: { list(): EufyDevice[]; devices: EufyDevice[] };
-    rtc: { dispatchCommand(route: RtcRoute, cmd: Command): Promise<void>; mediaProviderFor(route: unknown): unknown };
+    rtc: {
+      dispatchCommand(route: RtcRoute, cmd: Command): Promise<void>;
+      mediaProviderFor(route: unknown): unknown;
+      nvrMediaProviderFor(route: unknown, views: readonly number[]): unknown;
+    };
     p2p: { dispatchCommand(sn: string, cmd: Command): Promise<void> };
     routeCommand(sn: string, cmd: Command): Promise<void>;
     rtcMediaFor(sn: string): unknown;
@@ -166,13 +170,27 @@ describe("station-owned RTC command routing", () => {
     expect(other.internals.rtcMediaFor(CAMERA)).toBeUndefined();
   });
 
-  it("serves no RTC media for a camera attached to a T8N00, whose route carries commands only", () => {
+  it("serves a camera attached to a T8N00 through the NVR's media call, whatever its model", () => {
     const { internals, devices } = fixture();
     devices[0]!.model = "T8N00";
     devices[0]!.raw = { member: { admin_user_id: "synthetic-admin" } };
     const media = vi.spyOn(internals.rtc, "mediaProviderFor").mockReturnValue({ live: vi.fn() });
-    expect(internals.rtcMediaFor(CAMERA)).toBeUndefined();
+    const nvr = vi.spyOn(internals.rtc, "nvrMediaProviderFor").mockReturnValue({ live: vi.fn() });
+    expect(internals.rtcMediaFor(CAMERA)).toBeDefined();
+    expect(nvr).toHaveBeenCalledExactlyOnceWith(
+      {
+        stationSn: HUB,
+        adminUserId: "synthetic-admin",
+        attached: true,
+        signalingMode: "call",
+        iceTransportPolicy: "all",
+        cameraSn: CAMERA,
+        channel: 3,
+      },
+      [0],
+    );
     expect(media).not.toHaveBeenCalled();
+    expect(internals.rtcMediaFor(HUB)).toBeUndefined();
   });
 });
 

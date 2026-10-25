@@ -85,6 +85,7 @@ describe("public NVR camera media binding", () => {
   it.each([
     ["T8E00", 0],
     ["T8P00", 0],
+    ["T8P10", 0],
   ] as const)("starts %s through its public camera capability with sensor %s", async (model, sensor) => {
     vi.spyOn(RtcSession.prototype, "connect").mockImplementation(async function (this: RtcSession) {
       this.emit("connected");
@@ -92,7 +93,7 @@ describe("public NVR camera media binding", () => {
     const sent = vi.spyOn(RtcSession.prototype, "sendCommand").mockReturnValue(true);
     const { client, internals, p2p } = fixture(
       model,
-      `Synthetic PoE ${model === "T8E00" ? "Bullet PTZ Cam S4" : "Cam E40"}`,
+      `Synthetic PoE ${model === "T8E00" ? "Bullet PTZ Cam S4" : model === "T8P10" ? "Cam E41" : "Cam E40"}`,
     );
     try {
       const device = await client.getDevice(CAMERA);
@@ -114,6 +115,7 @@ describe("public NVR camera media binding", () => {
   it.each([
     ["T8E00", "Synthetic PoE Bullet PTZ Cam S4"],
     ["T8P00", "Synthetic PoE Cam E40"],
+    ["T8P10", "Synthetic PoE Cam E41"],
   ])("binds %s media without falling through to the unreachable P2P provider", async (model, name) => {
     const { client, p2p } = fixture(model, name);
     const device = await client.getDevice(CAMERA);
@@ -178,6 +180,7 @@ describe("public NVR optical view selection", () => {
   it.each([
     ["T8E00", "Synthetic PoE Bullet PTZ Cam S4", [0, 1]],
     ["T8P00", "Synthetic PoE Cam E40", [0]],
+    ["T8P10", "Synthetic PoE Cam E41", [0]],
   ] as const)("reports the supported views for %s", async (model, name, views) => {
     const { client, internals } = fixture(model, name);
     try {

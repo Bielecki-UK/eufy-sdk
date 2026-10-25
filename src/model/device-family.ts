@@ -134,7 +134,8 @@ export const isStation9000 = (ctx: FamilyContext): boolean => ctx.deviceType ===
 export const isNvrT8N00 = (ctx: FamilyContext): boolean => ctx.model === "T8N00";
 
 /** PoE cameras whose media is served by their NVR's portal call. */
-export const isNvrMediaCamera = (ctx: FamilyContext): boolean => ctx.model === "T8E00" || ctx.model === "T8P00";
+export const isNvrMediaCamera = (ctx: FamilyContext): boolean =>
+  ctx.model === "T8E00" || ctx.model === "T8P00" || ctx.model === "T8P10";
 /** PoE S4 camera with independently streamed fixed and movable optical views. */
 export const isNvrDualLensCamera = (ctx: FamilyContext): boolean => ctx.model === "T8E00";
 /** Video Doorbell C31 (T8223) or C30 (T8224), streamed by the app over the portal `call` route. */

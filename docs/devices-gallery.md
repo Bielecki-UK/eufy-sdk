@@ -166,11 +166,8 @@ from its reported capabilities. See [Devices & capabilities](/devices) for how r
   <figcaption>Wired Doorbell Dual <span class="model">T8203</span></figcaption>
 </figure>
 <figure>
-  <img src="/devices/security/security-T8210.webp" alt="Battery Doorbell 2K T8210" loading="lazy" />
-  <figcaption>Battery Doorbell 2K <span class="model">T8210</span></figcaption>
-</figure>
-<figure>
-  <figcaption>Video Doorbell 2K <span class="model">T8212</span></figcaption>
+  <img src="/devices/security/security-T8210.webp" alt="Battery Doorbell 2K T8210 · T8212" loading="lazy" />
+  <figcaption>Battery Doorbell 2K <span class="model">T8210 · T8212</span></figcaption>
 </figure>
 <figure>
   <img src="/devices/security/security-T8213.webp" alt="Battery Doorbell 2K Dual T8213" loading="lazy" />

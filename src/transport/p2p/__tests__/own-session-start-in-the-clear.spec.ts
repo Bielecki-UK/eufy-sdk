@@ -114,3 +114,33 @@ describe("own-session start and stop on a cipher-0 session", () => {
     expect(commandOf(sent[1])).toMatchObject({ command: 1700, counter: [0x01, 0x01], signCode: 0, frameType: 0 });
   });
 });
+
+describe("TEST BUILD: the T8420 app's start and stop on cipher 65433", () => {
+  beforeEach(() => void vi.useFakeTimers());
+  afterEach(() => void vi.useRealTimers());
+
+  it("starts with a 1350 wrapping cmd 1003 in the clear, as the iOS app does", () => {
+    const { session: s, sent } = session();
+    negotiate(s, 65433);
+    s.startLiveMedia(0, ACCOUNT_ID, false);
+
+    const start = commandOf(sent[0]);
+    expect(start).toMatchObject({ command: 1350, counter: [0x01, 0x00], channel: 0, signCode: 0, frameType: 11 });
+    const json = JSON.parse(start.body.toString("utf-8"));
+    expect(Object.keys(json)).toEqual(["cmd", "payload", "account_id"]);
+    expect(json).toMatchObject({ cmd: 1003, account_id: ACCOUNT_ID });
+    expect(Object.keys(json.payload)).toEqual(["ClientOS", "key", "entrytype", "timestamp", "msg_id", "streamtype"]);
+    expect(json.payload).toMatchObject({ ClientOS: "IOS", entrytype: 0, msg_id: 2, streamtype: 2 });
+    expect(json.payload.key).toMatch(/^[0-9a-f]{256}$/);
+  });
+
+  it("stops with a 1004 whose body is four zero bytes, in the clear", () => {
+    const { session: s, sent } = session();
+    negotiate(s, 65433);
+    s.stopLiveMedia(0, ACCOUNT_ID, false);
+
+    const stop = commandOf(sent[0]);
+    expect(stop).toMatchObject({ command: 1004, counter: [0x01, 0x00], channel: 0, signCode: 0, frameType: 0 });
+    expect([...stop.body]).toEqual([0, 0, 0, 0]);
+  });
+});

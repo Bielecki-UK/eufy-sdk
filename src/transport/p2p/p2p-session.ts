@@ -1397,6 +1397,7 @@ export class P2PSession extends EventEmitter {
     let signCode: number;
     let magic: [number, number];
     let frameType: number;
+    let outer = CMD_CONTROL_PAYLOAD;
     if (this.level2Key) {
       const enc = this.encryptLevel2(this.startLiveJson(channel, accountId));
       if (!enc) return;
@@ -1409,6 +1410,26 @@ export class P2PSession extends EventEmitter {
       payload = this.startLiveJson(channel, accountId, magic[1]);
       signCode = 0;
       frameType = 0;
+    } else if (this.startsLikeTheT8420App()) {
+      outer = CMD_SET_PAYLOAD;
+      payload = Buffer.from(
+        JSON.stringify({
+          cmd: CMD_START_REALTIME_MEDIA,
+          payload: {
+            ClientOS: "IOS",
+            key: this.rsaModulus(),
+            entrytype: 0,
+            timestamp: Date.now(),
+            msg_id: 2,
+            streamtype: 2,
+          },
+          account_id: accountId,
+        }),
+        "utf-8",
+      );
+      signCode = 0;
+      magic = [0x01, 0x00];
+      frameType = START_LIVE_FRAME_TYPE_L1;
     } else {
       payload = encryptP2PData(paddingP2PData(this.startLiveJson(channel, accountId)), this.level1Key);
       signCode = 1;
@@ -1417,7 +1438,7 @@ export class P2PSession extends EventEmitter {
     }
     const sequence = this.seqNumber;
     const data = Buffer.concat([
-      buildCommandHeader(sequence, CMD_CONTROL_PAYLOAD),
+      buildCommandHeader(sequence, outer),
       buildRawCommandPayload(payload, channel, signCode, magic, frameType),
     ]);
     this.seqNumber = (this.seqNumber + 1) & 0xffff;
@@ -1436,6 +1457,16 @@ export class P2PSession extends EventEmitter {
    */
   private sendsInTheClear(): boolean {
     return this.gatewayCipherId === 0;
+  }
+
+  /**
+   * TEST BUILD ONLY, not for merging: whether this session starts and stops live view the way the iOS app
+   * does on a standalone T8420 (capture on eufy-sdk#325). Its gateway-info reply names cipher 65433, for which
+   * the account has no key: a `1350` wrapping `{cmd: 1003, payload}` in the clear, then a `1004` with a
+   * 4-byte body, both with header bytes `01 00`.
+   */
+  private startsLikeTheT8420App(): boolean {
+    return this.gatewayCipherId === 65433 && !this.level2Key;
   }
 
   /**
@@ -1648,6 +1679,13 @@ export class P2PSession extends EventEmitter {
       const data = Buffer.concat([
         buildCommandHeader(this.seqNumber, CMD_STOP_REALTIME_MEDIA),
         buildRawCommandPayload(body, channel, 0, this.nextClearCommandBytes(), 0),
+      ]);
+      this.seqNumber = (this.seqNumber + 1) & 0xffff;
+      this.send(this.connectAddress, RequestMessageType.DATA, data);
+    } else if (!homeBaseAttached && this.startsLikeTheT8420App() && this.connectAddress) {
+      const data = Buffer.concat([
+        buildCommandHeader(this.seqNumber, CMD_STOP_REALTIME_MEDIA),
+        buildRawCommandPayload(body, channel, 0, [0x01, 0x00], 0),
       ]);
       this.seqNumber = (this.seqNumber + 1) & 0xffff;
       this.send(this.connectAddress, RequestMessageType.DATA, data);

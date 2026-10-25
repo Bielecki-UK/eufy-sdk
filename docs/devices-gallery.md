@@ -510,6 +510,7 @@ from its reported capabilities. See [Devices & capabilities](/devices) for how r
   <figcaption>water freeze sensor t8920 <span class="model">T8920</span></figcaption>
 </figure>
 <figure>
+  <img src="/devices/security/security-T90E0.webp" alt="Entry Sensor E20 T90E0" loading="lazy" />
   <figcaption>Entry Sensor E20 <span class="model">T90E0</span></figcaption>
 </figure>
 <figure>
@@ -768,6 +769,7 @@ The eufy **Clean** line — robot **vacuums** (the classic **RoboVac** and newer
 <div class="device-gallery">
 
 <figure>
+  <img src="/devices/security/security-T8354.webp" alt="Baby Monitor E21 T8354" loading="lazy" />
   <figcaption>Baby Monitor E21 <span class="model">T8354</span></figcaption>
 </figure>
 

@@ -422,6 +422,26 @@ describe("camera capability module", () => {
       expect(buildCommand("streamingQuality", "Max", ctx(2))).toMatchObject({ payload: { quality: 3 } });
     });
 
+    it("streamingQuality reads a tier, and answers undefined for a reading outside the tier set", () => {
+      const dev = Device.fromRecord("T8000P0000000000", { deviceType: 31, model: "T8410", params: { 1020: "2" } });
+      dev.bindActions(ctx(0, { deviceType: 31, model: "T8410", paramIds: new Set([1020]) }), {
+        dispatch: async () => undefined,
+      });
+      const acts = dev.camera!()!;
+      expect(acts.streamingQuality).toBe(2);
+      dev.applyParams({ 1020: "0" });
+      expect(acts.streamingQuality).toBe(0);
+      for (const outside of ["5", "4", "-1"]) {
+        dev.applyParams({ 1020: outside });
+        expect(acts.streamingQuality).toBeUndefined();
+      }
+      const described = dev.describe().details?.find((d) => d.capability === "camera");
+      expect(described?.reads?.find((r) => r.property === "streamingQuality")).toMatchObject({
+        kind: "enum",
+        values: [0, 1, 2, 3],
+      });
+    });
+
     it("recordingQuality throws on a value that isn't a real tier (no bogus value on the fire-and-forget wire)", () => {
       const c = ctx(3); // verified tiers = 1/2/3
       // Out-of-range raw values must NOT produce a command (0 / negative / above top tier / non-tier name).

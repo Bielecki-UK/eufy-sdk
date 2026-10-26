@@ -3,6 +3,7 @@ import { DeviceType } from "../device-types.js";
 import { isIndoorCamera, isIndoorCamMini, isIndoorPanTiltS350 } from "../device-family.js";
 import { setScalar, setPayload, setJson, isCameraCodec, hasCapability } from "./access.js";
 import { AUDIO_CMD } from "./audio.js";
+import { DOORBELL_CMD } from "./doorbell.js";
 import { cameraPowerTier } from "./battery.js";
 import { accepts, propertiesOf, provided, type Members, type Surface, type MemberDeps } from "./members.js";
 import type { AvailabilityContext, CapabilityModule, CapabilityActions, CommandContext } from "./types.js";
@@ -767,21 +768,16 @@ export const CAMERA_MEMBERS = {
    * `transaction` is part of the frame that was captured, so it is sent. The recording sibling's own
    * confirmed frame carries no such field; neither is inferred from the other.
    *
-   * Not offered on a doorbell, read or write. The tiers and the 2730 write are confirmed on a T8170 and
-   * a T8171 only; a T8210 reports 1020 as 5, which no tier names, and its live-view quality is the
-   * doorbell's own `videoQuality` on 1705. Elsewhere the getter answers a reading only when it is one of
-   * {@link STREAMING_QUALITY_TIERS}, and `undefined` otherwise.
+   * Not offered where the device reports the doorbell's own live-view quality (1705).
    */
   streamingQuality: {
     param: 1020,
     type: "number",
     kind: "enum",
     enumValues: STREAMING_QUALITY_TIERS,
-    decode: (raw) => (typeof raw === "number" && STREAMING_QUALITY_TIERS[raw] !== undefined ? raw : undefined),
-    decodedKind: "enum",
-    decodedValues: Object.keys(STREAMING_QUALITY_TIERS).map(Number),
     provenance: "verified",
-    available: (ctx: AvailabilityContext) => isCameraCodec(ctx) && !hasCapability(ctx, "doorbell"),
+    available: (ctx: AvailabilityContext) =>
+      isCameraCodec(ctx) && !(ctx.paramIds?.has(DOORBELL_CMD.VIDEO_QUALITY) ?? false),
     args: [{ name: "quality", kind: "enum", description: "A tier, or the name it maps to. 0 is Auto." }],
     ...accepts<StreamingQualityName>(),
     description:

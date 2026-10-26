@@ -442,6 +442,22 @@ describe("camera capability module", () => {
       });
     });
 
+    it("streamingQuality is not offered on a doorbell, which reports 1020 outside every tier", () => {
+      const doorbell = ctx(0, {
+        deviceType: DeviceType.BATTERY_DOORBELL_2,
+        model: "T8210",
+        capabilities: new Set(["camera", "doorbell"]),
+        paramIds: new Set([1020]),
+      });
+      const dev = Device.fromRecord("T8000P0000000000", { model: "T8210", params: { 1020: "5" } });
+      dev.bindActions(doorbell, { dispatch: async () => undefined });
+      const acts = dev.camera!()!;
+      expect("streamingQuality" in acts).toBe(false);
+      expect("setStreamingQuality" in acts).toBe(false);
+      expect(buildCommand("streamingQuality", 0, doorbell)).toBeUndefined();
+      expect(buildCommand("streamingQuality", 0, ctx(0))).toMatchObject({ cmd: CAMERA_CMD.STREAMING_QUALITY_SET });
+    });
+
     it("recordingQuality throws on a value that isn't a real tier (no bogus value on the fire-and-forget wire)", () => {
       const c = ctx(3); // verified tiers = 1/2/3
       // Out-of-range raw values must NOT produce a command (0 / negative / above top tier / non-tier name).

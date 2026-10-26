@@ -767,10 +767,10 @@ export const CAMERA_MEMBERS = {
    * `transaction` is part of the frame that was captured, so it is sent. The recording sibling's own
    * confirmed frame carries no such field; neither is inferred from the other.
    *
-   * The getter answers a reading only when it is one of {@link STREAMING_QUALITY_TIERS}, and `undefined`
-   * otherwise. The tiers are confirmed on a T8170 and a T8171; a battery doorbell (T8210) reports 1020
-   * as 5, which no tier names, and passing it through would hand an enum getter a value outside its own
-   * option set.
+   * Not offered on a doorbell, read or write. The tiers and the 2730 write are confirmed on a T8170 and
+   * a T8171 only; a T8210 reports 1020 as 5, which no tier names, and its live-view quality is the
+   * doorbell's own `videoQuality` on 1705. Elsewhere the getter answers a reading only when it is one of
+   * {@link STREAMING_QUALITY_TIERS}, and `undefined` otherwise.
    */
   streamingQuality: {
     param: 1020,
@@ -781,7 +781,7 @@ export const CAMERA_MEMBERS = {
     decodedKind: "enum",
     decodedValues: Object.keys(STREAMING_QUALITY_TIERS).map(Number),
     provenance: "verified",
-    available: isCameraCodec,
+    available: (ctx: AvailabilityContext) => isCameraCodec(ctx) && !hasCapability(ctx, "doorbell"),
     args: [{ name: "quality", kind: "enum", description: "A tier, or the name it maps to. 0 is Auto." }],
     ...accepts<StreamingQualityName>(),
     description:

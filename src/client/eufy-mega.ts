@@ -77,6 +77,7 @@ import {
   type RawParams,
 } from "../model/index.js";
 import {
+  isNvrMediaCamera,
   isNvrDualLensCamera,
   isCallDoorbell,
   isHomeBase,
@@ -1287,23 +1288,27 @@ export class EufyMega extends EventEmitter {
 
   /**
    * The RTC media provider for a station on a media-track route, or a camera attached to a T9000 whose
-   * `device_channel` resolves back to it on the station; `undefined` otherwise. A device attached to a T8N00 gets the
-   * NVR's dedicated media call whatever its model: the hub serves the media, as measured on a T8162, T8410, T8P10 and
-   * T8214 behind one.
+   * `device_channel` resolves back to it on the station; `undefined` otherwise. A camera attached to a T8N00 gets the
+   * NVR's dedicated media call when {@link isNvrMediaCamera} admits it: a PoE model or a named camera DeviceType, as
+   * measured on a T8162, T8410, T8214 and T8P10 behind one.
    */
   private rtcMediaFor(sn: string): MediaProvider | undefined {
     const route = this.rtcRouteFor(sn);
     if (route?.mediaTrack) return this.rtc.trackMediaProviderFor(route);
     if (!route?.attached) return undefined;
     const camera = this.registry.list().find((d) => d.sn === sn);
-    const raw = (camera?.raw ?? {}) as { device_channel?: unknown };
+    const raw = (camera?.raw ?? {}) as { device_channel?: unknown; device_type?: unknown };
     const channel = typeof raw.device_channel === "number" ? raw.device_channel : undefined;
     if (channel === undefined || this.registry.serialForFrame(route.stationSn, channel) !== sn) return undefined;
     if (route.signalingMode === "call") {
-      if (!camera) return undefined;
+      const family = {
+        model: camera?.model,
+        deviceType: typeof raw.device_type === "number" ? raw.device_type : undefined,
+      };
+      if (!isNvrMediaCamera(family)) return undefined;
       return this.rtc.nvrMediaProviderFor(
         { ...route, cameraSn: sn, channel },
-        isNvrDualLensCamera(camera) ? [0, 1] : [0],
+        isNvrDualLensCamera(family) ? [0, 1] : [0],
       );
     }
     return this.rtc.mediaProviderFor({ ...route, cameraSn: sn, channel });

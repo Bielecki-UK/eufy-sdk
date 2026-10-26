@@ -22,6 +22,7 @@
  * @module model/device-family
  */
 import { DeviceType } from "./device-types.js";
+import { codecForType } from "./classify.js";
 
 /** The evidence a family decision needs — a structural subset of `CommandContext`. */
 export interface FamilyContext {
@@ -133,6 +134,17 @@ export const isStation9000 = (ctx: FamilyContext): boolean => ctx.deviceType ===
 /** T8N00 NVR, identified by its reported model. */
 export const isNvrT8N00 = (ctx: FamilyContext): boolean => ctx.model === "T8N00";
 
+/** PoE cameras behind a T8N00, identified by model: not every one reports a DeviceType named here. */
+const NVR_POE_CAMERA_MODELS: ReadonlySet<string> = new Set(["T8E00", "T8P00", "T8P10"]);
+const NAMED_DEVICE_TYPES: ReadonlySet<number> = new Set(Object.values(DeviceType));
+/**
+ * A device whose media its T8N00 serves: a PoE camera, or one reporting a named camera-family DeviceType.
+ * An unnamed type is refused rather than defaulted: devices without a camera sit behind the NVR too and
+ * classify as cameras, and a call opened for one never delivers a frame.
+ */
+export const isNvrMediaCamera = (ctx: FamilyContext): boolean =>
+  (ctx.model !== undefined && NVR_POE_CAMERA_MODELS.has(ctx.model)) ||
+  (ctx.deviceType !== undefined && NAMED_DEVICE_TYPES.has(ctx.deviceType) && codecForType(ctx.deviceType) === "camera");
 /** PoE S4 camera with independently streamed fixed and movable optical views. */
 export const isNvrDualLensCamera = (ctx: FamilyContext): boolean => ctx.model === "T8E00";
 /** Video Doorbell C31 (T8223) or C30 (T8224), streamed by the app over the portal `call` route. */

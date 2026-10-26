@@ -1,6 +1,7 @@
 import { encode as encodeJpeg } from "jpeg-js";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { EufyDevice } from "../../core/types.js";
+import { DeviceType } from "../../model/device-types.js";
 import { LiveSnapshotUnavailableError } from "../../core/contracts.js";
 import { EufyMega } from "../eufy-mega.js";
 import * as snapshots from "../../transport/p2p/media.js";
@@ -9,6 +10,13 @@ import { RtcSession } from "../../transport/rtc/session.js";
 
 const HUB = "T8000P0000000000";
 const CAMERA = "T8000P0000000001";
+
+/** The DeviceType each non-PoE camera reported behind a T8N00; the PoE models are admitted by model. */
+const NVR_CAMERA_TYPES: Record<string, number> = {
+  T8162: DeviceType.CAMERA3_PRO,
+  T8410: DeviceType.INDOOR_PT_CAMERA,
+  T8214: DeviceType.BATTERY_DOORBELL_PLUS_E340,
+};
 
 /** Synthetic cloud records retain the category, product name and parent channel used in production. */
 function fixture(model: string, name: string) {
@@ -42,7 +50,7 @@ function fixture(model: string, name: string) {
       stationSn: HUB,
       channel: 3,
       params: {},
-      raw: { parent_sn: HUB, device_channel: 3 },
+      raw: { parent_sn: HUB, device_channel: 3, device_type: NVR_CAMERA_TYPES[model] },
     },
   ] as EufyDevice[];
   vi.spyOn(internals.mega, "getDeviceParamList").mockResolvedValue({ params: [] });
@@ -58,16 +66,27 @@ function fixture(model: string, name: string) {
 afterEach(() => vi.restoreAllMocks());
 
 describe("public NVR camera media binding", () => {
-  it.each(["missing-channel", "different-station"])("does not admit %s to NVR media", async (scenario) => {
-    const { client, internals } = fixture("T8P00", "Synthetic PoE Cam E40");
-    const records = internals.registry.devices as EufyDevice[];
-    if (scenario === "missing-channel") records[1]!.raw = { parent_sn: HUB };
-    if (scenario === "different-station") records[0]!.model = "T8010";
-    const provider = vi.spyOn(internals.rtc, "nvrMediaProviderFor");
-    await client.getDevice(CAMERA);
-    expect(provider).not.toHaveBeenCalled();
-    internals.rtc.close();
-  });
+  it.each(["unknown-model", "unnamed-type", "non-camera-type", "missing-channel", "different-station"])(
+    "does not admit %s to NVR media",
+    async (scenario) => {
+      const { client, internals } = fixture("T8P00", "Synthetic PoE Cam E40");
+      const records = internals.registry.devices as EufyDevice[];
+      if (scenario === "unknown-model") records[1]!.model = "T0000";
+      if (scenario === "unnamed-type")
+        Object.assign(records[1]!, { model: "T0000", raw: { parent_sn: HUB, device_channel: 3, device_type: 999 } });
+      if (scenario === "non-camera-type")
+        Object.assign(records[1]!, {
+          model: "T0000",
+          raw: { parent_sn: HUB, device_channel: 3, device_type: DeviceType.LOCK_8530 },
+        });
+      if (scenario === "missing-channel") records[1]!.raw = { parent_sn: HUB };
+      if (scenario === "different-station") records[0]!.model = "T8010";
+      const provider = vi.spyOn(internals.rtc, "nvrMediaProviderFor");
+      await client.getDevice(CAMERA);
+      expect(provider).not.toHaveBeenCalled();
+      internals.rtc.close();
+    },
+  );
   it("preserves cancellation and login failures from the public snapshot caller", async () => {
     const { client, internals } = fixture("T8P00", "Synthetic PoE Cam E40");
     const device = await client.getDevice(CAMERA);

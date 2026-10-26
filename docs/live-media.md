@@ -59,17 +59,23 @@ Worth knowing:
 
 ## Cameras behind a T8N00
 
-Every camera attached to a T8N00 supports `live()`, `openReadable()` and `snapshotLive()`
-through the NVR, whatever its model: the NVR serves the media, not the camera. This is
-confirmed on PoE cameras (T8E00 S4, T8P00 E40, T8P10 E41) and on cameras paired to the NVR
-as their base (T8162 eufyCam S3 Pro, T8410 Indoor Cam Pan&Tilt 2K, T8214 Video Doorbell
-E340). `live()` delivers H.265 video and AAC-LC or G.711 A-law audio; `openReadable()`
-provides video, and `snapshotLive()` captures a fresh still. Recording and talkback are
-not implemented for this route.
+A camera attached to a T8N00 is streamed through the NVR, which serves its media, when it is
+a PoE model or reports a camera DeviceType the SDK names. A device behind the NVR whose type
+the SDK does not name gets no NVR media: devices without a camera sit there too, and a call
+opened for one never delivers a frame.
 
-A battery camera behind the NVR wakes before its first frame, which took about 10 s on a
-T8162; a wired camera answered in about 2.5 s. The T8214 dual-camera doorbell delivers
-both lenses stitched into one 1600×2200 frame on view `0`.
+`live()` and `snapshotLive()` are confirmed on PoE cameras (T8E00 S4, T8P00 E40, T8P10 E41)
+and on cameras paired to the NVR as their base (T8162 eufyCam S3 Pro, T8410 Indoor Cam
+Pan&Tilt 2K, T8214 Video Doorbell E340); `openReadable()` shares the same route. `live()`
+delivers H.265 video and AAC-LC or G.711 A-law audio. Recording and talkback are not
+implemented for this route, so `record()` rejects and `talkback` is absent on these
+cameras.
+
+A battery camera behind the NVR wakes before its first frame, which took about 8 to 10 s on
+a T8162, and a still asked for one wakes it too; a wired camera answered in about 2.5 s. The
+T8214 dual-camera doorbell delivers both lenses stitched into one 1600×2200 frame on view
+`0`. The NVR has been seen to stop delivering media to a fifth simultaneous call (#480), and
+each optical view is its own call.
 
 `cam.views?.()` reports the optical view identifiers supported by this route: `[0, 1]`
 for the dual-lens T8E00 S4 and `[0]` for every other camera. On the S4, view `0` is fixed

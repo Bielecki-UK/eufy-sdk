@@ -59,13 +59,13 @@ Worth knowing:
 
 ## T8N00 PoE cameras
 
-T8E00 and T8P00 cameras attached to a T8N00 support `live()`, `openReadable()` and
+T8E00, T8P00 and T8P10 cameras attached to a T8N00 support `live()`, `openReadable()` and
 `snapshotLive()`. `live()` delivers H.265 video and AAC-LC or G.711 A-law audio;
 `openReadable()` provides video, and `snapshotLive()` captures a fresh still.
 Recording and talkback are not implemented for this route.
 
 `cam.views?.()` reports the optical view identifiers supported by this route: `[0, 1]`
-for the dual-lens T8E00 S4 and `[0]` for the T8P00 E40. On the S4, view `0` is fixed
+for the dual-lens T8E00 S4 and `[0]` for the T8P00 E40 and T8P10 E41. On the S4, view `0` is fixed
 and view `1` is movable. Omitting `view` selects `0`.
 
 ```ts

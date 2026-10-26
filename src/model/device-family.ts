@@ -94,6 +94,7 @@ export const FLOODLIGHT_TYPES: ReadonlySet<number> = new Set<number>([
 export const WALL_LIGHT_TYPES: ReadonlySet<number> = new Set<number>([
   DeviceType.WALL_LIGHT_CAM,
   DeviceType.WALL_LIGHT_CAM_81A0,
+  DeviceType.WALL_LIGHT_CAM_T86C1,
 ]);
 
 /**

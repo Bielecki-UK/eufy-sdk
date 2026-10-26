@@ -57,15 +57,15 @@ Worth knowing:
 - `record()` opens its own pull instead of joining the shared source, so it costs a second stream on a
   camera that is already streaming. `recordFragments()` is a shared consumer like everything else.
 
-## T8N00 PoE cameras
+## Cameras behind a T8N00
 
-T8E00, T8P00 and T8P10 cameras attached to a T8N00 support `live()`, `openReadable()` and
-`snapshotLive()`. `live()` delivers H.265 video and AAC-LC or G.711 A-law audio;
+T8E00, T8P00, T8P10, T8162, T8410 and T8214 cameras attached to a T8N00 support `live()`,
+`openReadable()` and `snapshotLive()`. `live()` delivers H.265 video and AAC-LC or G.711 A-law audio;
 `openReadable()` provides video, and `snapshotLive()` captures a fresh still.
 Recording and talkback are not implemented for this route.
 
 `cam.views?.()` reports the optical view identifiers supported by this route: `[0, 1]`
-for the dual-lens T8E00 S4 and `[0]` for the T8P00 E40 and T8P10 E41. On the S4, view `0` is fixed
+for the dual-lens T8E00 S4 and `[0]` for every other camera. On the S4, view `0` is fixed
 and view `1` is movable. Omitting `view` selects `0`.
 
 ```ts

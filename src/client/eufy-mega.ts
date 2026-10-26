@@ -1288,7 +1288,8 @@ export class EufyMega extends EventEmitter {
 
   /**
    * The RTC media provider for a station on a media-track route, or a camera attached to a T9000 whose
-   * `device_channel` resolves back to it on the station; `undefined` otherwise, unless an NVR camera has its own dedicated media call.
+   * `device_channel` resolves back to it on the station; `undefined` otherwise. A camera attached to a T8N00 gets the
+   * NVR's dedicated media call when {@link isNvrMediaCamera} admits it.
    */
   private rtcMediaFor(sn: string): MediaProvider | undefined {
     const route = this.rtcRouteFor(sn);

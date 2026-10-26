@@ -392,8 +392,10 @@ eufy.on("push", async (ev) => {
 
 The download is confirmed on recordings that had finished. How the station answers for a recording it is
 still writing is not established, so issue the download once the camera's configured clip length has
-elapsed since the push. Downloads queue one at a time per station, and the transfer runs faster than real
-time: a 12.8 s recording took about 6 s.
+elapsed since the push. A recording is named either as the push carries it (`yyyyMMddHHmmss`) or as a row of
+the station's own recording archive names it, with the codec prefixed (`h265_yyyyMMddHHmmss`); both reach the
+same file. Downloads queue one at a time per station, and the transfer runs faster than real time: a 12.8 s
+recording took about 6 s.
 
 The result is elementary streams, not a container: `video` is Annex-B H.264 and `audio` (when present) is
 AAC-LC in ADTS framing. `fps` and `durationMs` come from the camera's own frame stamps, and `missingFrames`

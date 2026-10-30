@@ -288,12 +288,12 @@ export class AccessUnitAssembler {
  * How much later than a split unit's first frame its other frames may be stamped, in milliseconds.
  *
  * Some stations repeat the first frame's timestamp on every frame of the unit; others stamp each frame with
- * its own send time, measured at up to 51 ms after the first on one model and 10 ms on another, both with a
- * {@link VideoFrameHeader.sequence} of 0 on every frame. The bound keeps a continuation stamped seconds away
- * from joining. A continuation of the NEXT unit, its first frame lost, never meets an open unit: a lost video
- * datagram reaches the assembler as a discard.
+ * its own send time, measured at up to 51 ms after the first on one model and 22 ms on another, both with a
+ * {@link VideoFrameHeader.sequence} of 0 on every frame. The bound is about twice the widest measured spread,
+ * and keeps a continuation stamped later than that from joining. A continuation of the NEXT unit, its first
+ * frame lost, never meets an open unit: a lost video datagram reaches the assembler as a discard.
  */
-const SPLIT_UNIT_STAMP_SPREAD_MS = 200;
+const SPLIT_UNIT_STAMP_SPREAD_MS = 100;
 
 /**
  * Whether a frame continues the open unit: the same sequence, stamped no earlier than the unit and within
